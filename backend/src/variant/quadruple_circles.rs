@@ -16,9 +16,13 @@ impl QuadrupleCircle {
 
 impl Variant for QuadrupleCircle {
     fn is_valid(&self, grid: &crate::SudokuGrid, row: usize, col: usize, value: u8) -> bool {
-        // If (row, col) is not in the cage, just pass
+        // If (row, col) is not in the quadruple circle, just pass
         if !self.cells.contains(&(row, col)) {
             return true;
+        }
+        // If there are 4 required numbers, and value is not one of them, then early return
+        if self.required.len() == 4 && !self.required.contains(&value) {
+            return false;
         }
 
         // Build the current set of values in the 4 cells, with the proposed value substituted in

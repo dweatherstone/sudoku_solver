@@ -2,6 +2,7 @@
 #![allow(unused_imports)]
 use axum::{
     Json, Router,
+    extract::Path,
     http::{Method, StatusCode, header::CONTENT_TYPE},
     response::IntoResponse,
     routing::{get, post},
@@ -9,27 +10,50 @@ use axum::{
 };
 use std::env;
 use std::io::Error;
+use std::sync::Arc;
 use sudoku_solver::{KillerCage, KropkiDot, QuadrupleCircle, Solver, SudokuGrid, SudokuVariant};
 use tokio::net::TcpListener;
+use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
 
-async fn sudoku_handler() -> impl IntoResponse {
-    // Load from file, or create hardcoded example
-    //let grid = SudokuGrid::read_from_file("sudoku.txt").unwrap();
-    //let grid = quadruple_circles_example(false);
-    let grid = building_blocks(false);
-    Json(grid)
+// Global state
+struct AppState {
+    grid: RwLock<SudokuGrid>,
 }
 
-async fn solve_handler(Json(mut grid): Json<SudokuGrid>) -> Result<Json<SudokuGrid>, StatusCode> {
-    grid.display(true);
+async fn sudoku_handler(
+    axum::extract::State(state): axum::extract::State<Arc<AppState>>,
+) -> impl IntoResponse {
+    let grid = state.grid.read().await;
+    Json(grid.clone())
+}
+
+async fn solve_handler(
+    axum::extract::State(state): axum::extract::State<Arc<AppState>>,
+) -> Result<Json<SudokuGrid>, StatusCode> {
+    let mut grid = state.grid.write().await;
     let mut solver = Solver::new(&mut grid);
 
     if solver.solve() {
-        Ok(Json(grid))
+        Ok(Json(grid.clone()))
     } else {
         Err(StatusCode::UNPROCESSABLE_ENTITY)
     }
+}
+
+async fn set_cell_handler(
+    axum::extract::State(state): axum::extract::State<Arc<AppState>>,
+    Path((row, col, value)): Path<(usize, usize, u8)>,
+) -> Result<Json<SudokuGrid>, StatusCode> {
+    let mut grid = state.grid.write().await;
+
+    // Validate the move
+    if !grid.is_valid_move(row, col, value) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    grid.set_cell(row, col, value);
+    Ok(Json(grid.clone()))
 }
 
 #[tokio::main]
@@ -39,9 +63,17 @@ async fn main() {
         .allow_methods([Method::GET, Method::POST])
         .allow_headers([CONTENT_TYPE]);
 
+    // Initialize the grid
+    let grid = building_blocks(false);
+    let state = Arc::new(AppState {
+        grid: RwLock::new(grid),
+    });
+
     let app = Router::new()
         .route("/sudoku", get(sudoku_handler))
         .route("/solve", post(solve_handler))
+        .route("/cell/{row}/{col}/{value}", post(set_cell_handler))
+        .with_state(state)
         .layer(cors);
 
     let listener = TcpListener::bind("127.0.0.1:3000")
@@ -58,6 +90,7 @@ async fn main() {
 //         //killer_example();
 //         building_blocks(true);
 //         //quadruple_circles_example(true);
+//         // kropki_example(true);
 //         return Ok(());
 //     }
 //     let filename = &args[1];
@@ -117,12 +150,30 @@ fn building_blocks(do_solve: bool) -> SudokuGrid {
         )));
     }
 
+    // Positions 1
     sudoku_grid.set_cell(1, 7, 1);
     sudoku_grid.set_cell(2, 4, 1);
     sudoku_grid.set_cell(6, 4, 2);
     sudoku_grid.set_cell(6, 5, 1);
     sudoku_grid.set_cell(7, 1, 2);
     sudoku_grid.set_cell(7, 2, 1);
+    // Positions 2
+    sudoku_grid.set_cell(0, 0, 2);
+    sudoku_grid.set_cell(0, 1, 1);
+    sudoku_grid.set_cell(1, 0, 3);
+    sudoku_grid.set_cell(1, 1, 8);
+    sudoku_grid.set_cell(1, 6, 2);
+    sudoku_grid.set_cell(1, 7, 1);
+    sudoku_grid.set_cell(2, 3, 2);
+    sudoku_grid.set_cell(3, 2, 8);
+    sudoku_grid.set_cell(3, 5, 2);
+    sudoku_grid.set_cell(3, 6, 1);
+    sudoku_grid.set_cell(4, 2, 2);
+    sudoku_grid.set_cell(4, 6, 3);
+    sudoku_grid.set_cell(4, 8, 8);
+    sudoku_grid.set_cell(5, 2, 3);
+    sudoku_grid.set_cell(5, 8, 2);
+    sudoku_grid.set_cell(6, 1, 3);
 
     if do_solve {
         run_solve(&mut sudoku_grid, false);
@@ -223,9 +274,70 @@ fn quadruple_circles_example(do_solve: bool) -> SudokuGrid {
     sudoku_grid
 }
 
-fn kropki_example() {
+fn kropki_example(do_solve: bool) -> SudokuGrid {
     // https://escape-sudoku.com/game/dots
-    unimplemented!()
+    let mut grid = SudokuGrid::default();
+    let black_dots = [
+        vec![(0, 5), (0, 6)],
+        vec![(1, 2), (2, 2)],
+        vec![(1, 5), (2, 5)],
+        vec![(3, 2), (4, 2)],
+        vec![(3, 4), (4, 4)],
+        vec![(6, 6), (7, 6)],
+    ];
+    for cells in black_dots {
+        grid.add_variant(SudokuVariant::Kropki(KropkiDot::new(cells, "black")));
+    }
+    let white_dots = [
+        vec![(0, 1), (1, 1)],
+        vec![(0, 3), (1, 3)],
+        vec![(0, 7), (0, 8)],
+        vec![(1, 0), (2, 0)],
+        vec![(2, 1), (3, 1)],
+        vec![(2, 3), (3, 3)],
+        vec![(2, 7), (3, 7)],
+        vec![(2, 8), (3, 8)],
+        vec![(3, 5), (4, 5)],
+        vec![(4, 0), (5, 0)],
+        vec![(5, 2), (5, 3)],
+        vec![(4, 6), (5, 6)],
+        vec![(5, 8), (6, 8)],
+        vec![(6, 1), (7, 1)],
+        vec![(6, 3), (7, 3)],
+        vec![(7, 4), (8, 4)],
+        vec![(8, 0), (8, 1)],
+        vec![(8, 2), (8, 3)],
+        vec![(7, 7), (8, 7)],
+    ];
+    for cells in white_dots {
+        grid.add_variant(SudokuVariant::Kropki(KropkiDot::new(cells, "white")));
+    }
+    grid.set_cell(0, 0, 5);
+    grid.set_cell(1, 4, 9);
+    grid.set_cell(1, 6, 6);
+    grid.set_cell(1, 7, 7);
+    grid.set_cell(2, 4, 5);
+    grid.set_cell(2, 5, 1);
+    grid.set_cell(2, 8, 8);
+    grid.set_cell(4, 6, 7);
+    grid.set_cell(4, 7, 5);
+    grid.set_cell(5, 0, 7);
+    grid.set_cell(5, 2, 4);
+    grid.set_cell(5, 4, 1);
+    grid.set_cell(5, 5, 3);
+    grid.set_cell(6, 6, 1);
+    grid.set_cell(7, 5, 9);
+    grid.set_cell(8, 2, 7);
+    grid.set_cell(8, 5, 4);
+    grid.set_cell(8, 6, 5);
+    grid.set_cell(8, 7, 9);
+    grid.set_cell(8, 8, 3);
+
+    if do_solve {
+        run_solve(&mut grid, true);
+    }
+
+    grid
 }
 
 fn run_solve(grid: &mut SudokuGrid, show_variants: bool) {
