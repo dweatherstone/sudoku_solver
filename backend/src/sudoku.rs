@@ -1,25 +1,52 @@
-use std::{
-    fs::File,
-    io::{BufRead, BufReader, Error, ErrorKind},
-};
+use std::io::Error;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{KillerCage, KropkiDot, QuadrupleCircle, variant::Variant};
+use crate::{
+    Diagonal, KillerCage, KropkiDot, QuadrupleCircle, Thermometer, file_parser, variant::Variant,
+};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub enum SudokuVariant {
+    Diagonal(Diagonal),
     Killer(KillerCage),
     Kropki(KropkiDot),
     QuadrupleCircles(QuadrupleCircle),
+    Thermometer(Thermometer),
 }
 
 impl SudokuVariant {
+    pub fn parse(line: &str) -> Option<SudokuVariant> {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        let parts: Vec<&str> = trimmed.splitn(2, ':').collect();
+        if parts.len() < 2 {
+            return None;
+        }
+
+        let variant_type = parts[0].trim().to_lowercase();
+        let data = parts[1].trim();
+
+        match variant_type.as_str() {
+            "killer" => KillerCage::parse(data),
+            "diagonal" => Diagonal::parse(data),
+            "thermometer" => Thermometer::parse(data),
+            "kropki" => KropkiDot::parse(data),
+            "quadruple" => QuadrupleCircle::parse(data),
+            _ => None,
+        }
+    }
+
     pub fn is_valid(&self, grid: &SudokuGrid, row: usize, col: usize, value: u8) -> bool {
         match self {
+            SudokuVariant::Diagonal(diag) => diag.is_valid(grid, row, col, value),
             SudokuVariant::Killer(cage) => cage.is_valid(grid, row, col, value),
             SudokuVariant::Kropki(dot) => dot.is_valid(grid, row, col, value),
             SudokuVariant::QuadrupleCircles(circle) => circle.is_valid(grid, row, col, value),
+            SudokuVariant::Thermometer(therm) => therm.is_valid(grid, row, col, value),
         }
     }
 }
@@ -74,11 +101,13 @@ impl SudokuGrid {
             println!("Variants:");
             for variant in &self.variants {
                 match variant {
+                    SudokuVariant::Diagonal(diag) => println!("Diagonal: {:?}", diag),
                     SudokuVariant::Killer(cage) => println!("Killer Cage: {:?}", cage),
                     SudokuVariant::Kropki(dot) => println!("Kropki Dot: {:?}", dot),
                     SudokuVariant::QuadrupleCircles(circle) => {
                         println!("Quadruple Circles: {:?}", circle)
                     }
+                    SudokuVariant::Thermometer(therm) => println!("Thermometer: {:?}", therm),
                 }
             }
         }
@@ -96,26 +125,7 @@ impl SudokuGrid {
     }
 
     pub fn read_from_file(filename: &str) -> Result<Self, Error> {
-        let file = File::open(filename)?;
-        let reader = BufReader::new(file);
-
-        let mut sudoku_grid = SudokuGrid::default();
-
-        for (row, line) in reader.lines().enumerate() {
-            let line = line?;
-            let chars: Vec<char> = line.chars().collect();
-            for (col, ch) in chars.iter().enumerate() {
-                if let Some(num) = ch.to_digit(10) {
-                    sudoku_grid.set_cell(row, col, num as u8);
-                } else if *ch != '.' {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "Invalid character in input",
-                    ));
-                }
-            }
-        }
-        Ok(sudoku_grid)
+        file_parser::parse_file(filename)
     }
 
     fn used_in_col(&self, col: usize, num: u8) -> bool {

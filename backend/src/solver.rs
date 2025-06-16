@@ -9,11 +9,15 @@ impl<'a> Solver<'a> {
         Solver { sudoku_grid }
     }
 
-    pub fn solve(&mut self) -> bool {
-        self.solve_recursive()
+    pub fn solve(&mut self, debug: bool) -> bool {
+        self.solve_recursive(debug)
     }
 
-    fn solve_recursive(&mut self) -> bool {
+    fn solve_recursive(&mut self, debug: bool) -> bool {
+        if debug {
+            println!("Current grid:::::::::::::::::::::");
+            self.sudoku_grid.display(false);
+        }
         // Find the next empty cell (if any)
         if let Some((row, col)) = self.sudoku_grid.find_empty_cell() {
             // Try filling the cell with each possible digit
@@ -23,7 +27,7 @@ impl<'a> Solver<'a> {
                     // If valid, set the cell value and recursively solve
                     self.sudoku_grid.set_cell(row, col, num as u8);
                     // Recursively solve the puzzle
-                    if self.solve() {
+                    if self.solve(debug) {
                         return true;
                     }
                     // If the recursive call returns false, backtrack and try the next digit

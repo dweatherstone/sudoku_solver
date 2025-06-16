@@ -11,7 +11,10 @@ use axum::{
 use std::env;
 use std::io::Error;
 use std::sync::Arc;
-use sudoku_solver::{KillerCage, KropkiDot, QuadrupleCircle, Solver, SudokuGrid, SudokuVariant};
+use sudoku_solver::{
+    Diagonal, KillerCage, KropkiDot, QuadrupleCircle, Solver, SudokuGrid, SudokuVariant,
+    Thermometer,
+};
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
@@ -34,7 +37,7 @@ async fn solve_handler(
     let mut grid = state.grid.write().await;
     let mut solver = Solver::new(&mut grid);
 
-    if solver.solve() {
+    if solver.solve(false) {
         Ok(Json(grid.clone()))
     } else {
         Err(StatusCode::UNPROCESSABLE_ENTITY)
@@ -56,57 +59,60 @@ async fn set_cell_handler(
     Ok(Json(grid.clone()))
 }
 
-#[tokio::main]
-async fn main() {
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods([Method::GET, Method::POST])
-        .allow_headers([CONTENT_TYPE]);
+// #[tokio::main]
+// async fn main() {
+//     let cors = CorsLayer::new()
+//         .allow_origin(Any)
+//         .allow_methods([Method::GET, Method::POST])
+//         .allow_headers([CONTENT_TYPE]);
 
-    // Initialize the grid
-    let grid = building_blocks(false);
-    let state = Arc::new(AppState {
-        grid: RwLock::new(grid),
-    });
+//     // Initialize the grid
+//     let grid = draft_day(false);
+//     let state = Arc::new(AppState {
+//         grid: RwLock::new(grid),
+//     });
 
-    let app = Router::new()
-        .route("/sudoku", get(sudoku_handler))
-        .route("/solve", post(solve_handler))
-        .route("/cell/{row}/{col}/{value}", post(set_cell_handler))
-        .with_state(state)
-        .layer(cors);
+//     let app = Router::new()
+//         .route("/sudoku", get(sudoku_handler))
+//         .route("/solve", post(solve_handler))
+//         .route("/cell/{row}/{col}/{value}", post(set_cell_handler))
+//         .with_state(state)
+//         .layer(cors);
 
-    let listener = TcpListener::bind("127.0.0.1:3000")
-        .await
-        .expect("Failed to bind listener");
-    println!("Running on http://localhost:3000");
-    serve(listener, app).await.expect("Server error");
-}
-
-// fn main() -> Result<(), Error> {
-//     let args: Vec<String> = env::args().collect();
-
-//     if args.len() != 2 {
-//         //killer_example();
-//         building_blocks(true);
-//         //quadruple_circles_example(true);
-//         // kropki_example(true);
-//         return Ok(());
-//     }
-//     let filename = &args[1];
-
-//     let mut sudoku_grid = match SudokuGrid::read_from_file(filename) {
-//         Ok(grid) => grid,
-//         Err(e) => {
-//             eprintln!("Error reading sudoku puzzle: {}", e);
-//             return Err(Error::other("Falied to read Sudoku puzzle"));
-//         }
-//     };
-
-//     run_solve(&mut sudoku_grid, false);
-
-//     Ok(())
+//     let listener = TcpListener::bind("127.0.0.1:3000")
+//         .await
+//         .expect("Failed to bind listener");
+//     println!("Running on http://localhost:3000");
+//     serve(listener, app).await.expect("Server error");
 // }
+
+fn main() -> Result<(), Error> {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() != 2 {
+        //killer_example();
+        //building_blocks(true);
+        //quadruple_circles_example(true);
+        // kropki_example(true);
+        draft_day(true);
+        return Ok(());
+    }
+    let filename = &args[1];
+
+    let mut sudoku_grid = match SudokuGrid::read_from_file(filename) {
+        Ok(grid) => grid,
+        Err(e) => {
+            eprintln!("Error reading sudoku puzzle: {}", e);
+            return Err(Error::other("Falied to read Sudoku puzzle"));
+        }
+    };
+
+    //sudoku_grid.display(true);
+
+    run_solve(&mut sudoku_grid, true, false);
+
+    Ok(())
+}
 
 fn building_blocks(do_solve: bool) -> SudokuGrid {
     // https://artisanalsudoku.substack.com/p/artisanal-sudoku-volume-178
@@ -176,7 +182,7 @@ fn building_blocks(do_solve: bool) -> SudokuGrid {
     sudoku_grid.set_cell(6, 1, 3);
 
     if do_solve {
-        run_solve(&mut sudoku_grid, false);
+        run_solve(&mut sudoku_grid, false, false);
     }
     sudoku_grid
 }
@@ -237,7 +243,7 @@ fn killer_example() {
     sudoku_grid.set_cell(7, 4, 8);
     sudoku_grid.set_cell(7, 7, 9);
 
-    run_solve(&mut sudoku_grid, false);
+    run_solve(&mut sudoku_grid, false, false);
 }
 
 fn quadruple_circles_example(do_solve: bool) -> SudokuGrid {
@@ -269,7 +275,7 @@ fn quadruple_circles_example(do_solve: bool) -> SudokuGrid {
         )));
     }
     if do_solve {
-        run_solve(&mut sudoku_grid, true);
+        run_solve(&mut sudoku_grid, true, false);
     }
     sudoku_grid
 }
@@ -334,18 +340,58 @@ fn kropki_example(do_solve: bool) -> SudokuGrid {
     grid.set_cell(8, 8, 3);
 
     if do_solve {
-        run_solve(&mut grid, true);
+        run_solve(&mut grid, true, false);
     }
 
     grid
 }
 
-fn run_solve(grid: &mut SudokuGrid, show_variants: bool) {
+fn draft_day(do_solve: bool) -> SudokuGrid {
+    let mut grid = SudokuGrid::new();
+    grid.add_variant(SudokuVariant::Diagonal(Diagonal::new(true)));
+    let killer_cages = [
+        (vec![(0, 1), (0, 2)], 11),
+        (vec![(1, 0), (2, 0)], 5),
+        (vec![(0, 6), (0, 7), (1, 6)], 6),
+        (vec![(1, 8), (2, 7), (2, 8)], 24),
+        (vec![(4, 3), (5, 3), (5, 4)], 13),
+        (vec![(6, 0), (6, 1), (7, 0)], 24),
+        (vec![(6, 7), (6, 8)], 11),
+        (vec![(8, 7), (8, 8)], 8),
+    ];
+    for (cells, sum) in killer_cages {
+        grid.add_variant(SudokuVariant::Killer(KillerCage::new(cells, sum)));
+    }
+    grid.add_variant(SudokuVariant::Thermometer(Thermometer::new(vec![
+        (8, 4),
+        (7, 3),
+        (6, 2),
+        (5, 1),
+        (4, 0),
+        (3, 0),
+    ])));
+    grid.add_variant(SudokuVariant::Thermometer(Thermometer::new(vec![
+        (6, 7),
+        (5, 7),
+        (4, 6),
+        (3, 5),
+        (2, 4),
+        (1, 3),
+    ])));
+
+    if do_solve {
+        run_solve(&mut grid, true, false);
+    }
+
+    grid
+}
+
+fn run_solve(grid: &mut SudokuGrid, show_variants: bool, debug: bool) {
     println!("Sudoku Puzzle::::");
     grid.display(show_variants);
 
     let mut solver = Solver::new(grid);
-    if solver.solve() {
+    if solver.solve(debug) {
         println!("\n<<<<<<<<<<<<<<<<<Solved Sudoku Puzzle>>>>>>>>>>>>>>>>>>>>");
         grid.display(show_variants);
     } else {

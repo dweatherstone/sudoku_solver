@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{SudokuGrid, variant::Variant};
+use crate::{SudokuGrid, SudokuVariant, file_parser::parse_positions, variant::Variant};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct KropkiDot {
     cells: [(usize, usize); 2],
     colour: KropkiColour,
@@ -18,6 +18,23 @@ impl KropkiDot {
             cells: [cells[0], cells[1]],
             colour: kropki_colour,
         }
+    }
+
+    pub fn parse(data: &str) -> Option<SudokuVariant> {
+        let parts: Vec<&str> = data.split(':').collect();
+        if parts.len() != 2 {
+            return None;
+        }
+        let cells = parse_positions(parts[0].trim()).ok()?;
+        if cells.len() != 2 {
+            return None;
+        }
+        let colour = match parts[1].trim().to_lowercase().as_str() {
+            "white" => "white",
+            "black" => "black",
+            _ => return None,
+        };
+        Some(SudokuVariant::Kropki(KropkiDot::new(cells, colour)))
     }
 }
 
@@ -44,16 +61,12 @@ impl Variant for KropkiDot {
         }
     }
 
-    fn affected_cells(&self) -> Vec<(usize, usize)> {
-        Vec::from(self.cells)
-    }
-
     fn name(&self) -> String {
         String::from("Kropki Dot")
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 enum KropkiColour {
     White,
     Black,

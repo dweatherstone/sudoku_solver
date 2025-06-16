@@ -1,16 +1,87 @@
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
-use crate::variant::Variant;
+use crate::{SudokuVariant, file_parser::parse_positions, variant::Variant};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct KillerCage {
     cells: Vec<(usize, usize)>,
     sum: u32,
+    possible_values: HashSet<u8>,
 }
 
 impl KillerCage {
     pub fn new(cells: Vec<(usize, usize)>, sum: u32) -> Self {
-        KillerCage { cells, sum }
+        let mut cage = KillerCage {
+            cells,
+            sum,
+            possible_values: HashSet::new(),
+        };
+        cage.set_possible_values();
+        cage
+    }
+
+    pub fn parse(data: &str) -> Option<SudokuVariant> {
+        let parts: Vec<&str> = data.split(':').collect();
+        if parts.len() != 2 {
+            return None;
+        }
+        let cells = parse_positions(parts[0].trim()).ok()?;
+        let sum = parts[1].trim().parse().ok()?;
+        Some(SudokuVariant::Killer(KillerCage::new(cells, sum)))
+    }
+
+    fn set_possible_values(&mut self) {
+        let digits = (1u8..=9).collect::<Vec<_>>();
+        let mut result = HashSet::new();
+
+        // Recursive helper to generate combinations
+        fn backtrack(
+            digits: &[u8],
+            size: usize,
+            target_sum: u32,
+            start: usize,
+            current_combo: &mut Vec<u8>,
+            result: &mut HashSet<u8>,
+        ) {
+            if size == 0 {
+                if target_sum == 0 {
+                    // Valid combo found: add all digits to result
+                    for &d in current_combo.iter() {
+                        result.insert(d);
+                    }
+                }
+                return;
+            }
+            for i in start..digits.len() {
+                let d = digits[i] as u32;
+                if d > target_sum {
+                    // Prune: digits are sorted ascending, no point going further
+                    break;
+                }
+                current_combo.push(digits[i]);
+                backtrack(
+                    digits,
+                    size - 1,
+                    target_sum - d,
+                    i + 1,
+                    current_combo,
+                    result,
+                );
+                current_combo.pop();
+            }
+        }
+
+        backtrack(
+            &digits,
+            self.cells.len(),
+            self.sum,
+            0,
+            &mut Vec::new(),
+            &mut result,
+        );
+        self.possible_values = result;
     }
 }
 
@@ -19,6 +90,10 @@ impl Variant for KillerCage {
         // If (row, col) is not in the cage, just pass
         if !self.cells.contains(&(row, col)) {
             return true;
+        }
+
+        if !self.possible_values.contains(&value) {
+            return false;
         }
 
         // If the cage already contains the value, then invalid
@@ -55,11 +130,41 @@ impl Variant for KillerCage {
         }
     }
 
-    fn affected_cells(&self) -> Vec<(usize, usize)> {
-        self.cells.clone()
-    }
-
     fn name(&self) -> String {
         String::from("Killer Cage")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_possible_values() {
+        let tests = [
+            (vec![(0, 0), (0, 1)], 17, HashSet::from_iter(vec![8, 9])),
+            (
+                vec![(0, 0), (0, 1), (0, 2)],
+                6,
+                HashSet::from_iter(vec![1, 2, 3]),
+            ),
+            (
+                vec![(0, 0), (0, 1)],
+                10,
+                HashSet::from_iter(vec![1, 2, 3, 4, 6, 7, 8, 9]),
+            ),
+        ];
+
+        for (idx, (cells, sum, expected_possible_values)) in tests.iter().enumerate() {
+            let cage = KillerCage::new(cells.clone(), *sum);
+            assert_eq!(
+                cage.possible_values,
+                *expected_possible_values,
+                "Test {} failed. Expected possible values: {:?}. Got: {:?}",
+                idx + 1,
+                expected_possible_values,
+                cage.possible_values
+            );
+        }
     }
 }

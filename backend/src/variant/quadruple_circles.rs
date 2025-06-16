@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use crate::variant::Variant;
+use crate::{SudokuVariant, file_parser::parse_positions, variant::Variant};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct QuadrupleCircle {
     cells: Vec<(usize, usize)>,
     required: Vec<u8>,
@@ -11,6 +11,29 @@ pub struct QuadrupleCircle {
 impl QuadrupleCircle {
     pub fn new(cells: Vec<(usize, usize)>, required: Vec<u8>) -> Self {
         QuadrupleCircle { cells, required }
+    }
+
+    pub fn parse(data: &str) -> Option<SudokuVariant> {
+        let parts: Vec<&str> = data.split(':').collect();
+        if parts.len() != 2 {
+            return None;
+        }
+        let cells = parse_positions(parts[0].trim()).ok()?;
+        if cells.len() != 4 {
+            return None;
+        }
+        let required_str: Vec<&str> = parts[1].split(',').collect();
+        let required: Option<Vec<u8>> = required_str
+            .iter()
+            .map(|&r| r.trim().parse::<u8>().ok())
+            .collect();
+        let required = required?;
+        if required.is_empty() || required.len() > 4 {
+            return None;
+        }
+        Some(SudokuVariant::QuadrupleCircles(QuadrupleCircle::new(
+            cells, required,
+        )))
     }
 }
 
@@ -55,10 +78,6 @@ impl Variant for QuadrupleCircle {
             return false;
         }
         true
-    }
-
-    fn affected_cells(&self) -> Vec<(usize, usize)> {
-        self.cells.clone()
     }
 
     fn name(&self) -> String {
