@@ -1,4 +1,4 @@
-use std::io::Error;
+use std::{collections::HashSet, io::Error};
 
 use serde::{Deserialize, Serialize};
 
@@ -47,6 +47,38 @@ impl SudokuVariant {
             SudokuVariant::Kropki(dot) => dot.is_valid(grid, row, col, value),
             SudokuVariant::QuadrupleCircles(circle) => circle.is_valid(grid, row, col, value),
             SudokuVariant::Thermometer(therm) => therm.is_valid(grid, row, col, value),
+        }
+    }
+
+    pub fn validate_solution(&self, grid: &SudokuGrid) -> bool {
+        match self {
+            SudokuVariant::Diagonal(diag) => diag.validate_solution(grid),
+            SudokuVariant::Killer(cage) => cage.validate_solution(grid),
+            SudokuVariant::Kropki(dot) => dot.validate_solution(grid),
+            SudokuVariant::QuadrupleCircles(circle) => circle.validate_solution(grid),
+            SudokuVariant::Thermometer(therm) => therm.validate_solution(grid),
+        }
+    }
+
+    pub fn constrained_cells(&self) -> Vec<(usize, usize)> {
+        match self {
+            SudokuVariant::Diagonal(diag) => diag.constrained_cells(),
+            SudokuVariant::Killer(cage) => cage.constrained_cells(),
+            SudokuVariant::Kropki(dot) => dot.constrained_cells(),
+            SudokuVariant::QuadrupleCircles(circle) => circle.constrained_cells(),
+            SudokuVariant::Thermometer(therm) => therm.constrained_cells(),
+        }
+    }
+}
+
+impl std::fmt::Display for SudokuVariant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SudokuVariant::Diagonal(diag) => write!(f, "{}", diag),
+            SudokuVariant::Killer(cage) => write!(f, "{}", cage),
+            SudokuVariant::Kropki(dot) => write!(f, "{}", dot),
+            SudokuVariant::QuadrupleCircles(circle) => write!(f, "{}", circle),
+            SudokuVariant::Thermometer(therm) => write!(f, "{}", therm),
         }
     }
 }
@@ -100,15 +132,7 @@ impl SudokuGrid {
         if show_variants {
             println!("Variants:");
             for variant in &self.variants {
-                match variant {
-                    SudokuVariant::Diagonal(diag) => println!("Diagonal: {:?}", diag),
-                    SudokuVariant::Killer(cage) => println!("Killer Cage: {:?}", cage),
-                    SudokuVariant::Kropki(dot) => println!("Kropki Dot: {:?}", dot),
-                    SudokuVariant::QuadrupleCircles(circle) => {
-                        println!("Quadruple Circles: {:?}", circle)
-                    }
-                    SudokuVariant::Thermometer(therm) => println!("Thermometer: {:?}", therm),
-                }
+                println!("{}", variant);
             }
         }
     }
@@ -164,13 +188,58 @@ impl SudokuGrid {
         self.variants
             .iter()
             .all(|v| v.is_valid(self, row, col, num))
-        //self.is_classic_valid(row, col, num)
+    }
+
+    pub fn is_board_valid(&self) -> bool {
+        // Check rows
+        for row in 0..9 {
+            if !Self::is_valid_group(&self.cells[row]) {
+                return false;
+            }
+        }
+
+        // Check columns
+        for col in 0..9 {
+            let mut column = [0u8; 9];
+            for row in 0..9 {
+                column[row] = self.cells[row][col];
+            }
+            if !Self::is_valid_group(&column) {
+                return false;
+            }
+        }
+
+        // Check 3x3 boxes
+        for box_row in 0..3 {
+            for box_col in 0..3 {
+                let mut block = [0u8; 9];
+                for i in 0..3 {
+                    for j in 0..3 {
+                        block[i * 3 + j] = self.cells[box_row * 3 + i][box_col * 3 + j];
+                    }
+                }
+                if !Self::is_valid_group(&block) {
+                    return false;
+                }
+            }
+        }
+        true
     }
 
     fn is_classic_valid(&self, row: usize, col: usize, num: u8) -> bool {
         !self.used_in_row(row, num)
             && !self.used_in_col(col, num)
             && !self.used_in_subgrid(row - row % 3, col - col % 3, num)
+    }
+
+    fn is_valid_group(group: &[u8; 9]) -> bool {
+        let mut seen = HashSet::with_capacity(9);
+        for &num in group {
+            if !(1..=9).contains(&num) || !seen.insert(num) {
+                return false;
+            }
+        }
+        true
     }
 }
 

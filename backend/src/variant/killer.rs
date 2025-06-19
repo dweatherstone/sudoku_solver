@@ -22,6 +22,14 @@ impl KillerCage {
         cage
     }
 
+    pub fn cells(&self) -> &Vec<(usize, usize)> {
+        &self.cells
+    }
+
+    pub fn sum(&self) -> u32 {
+        self.sum
+    }
+
     pub fn parse(data: &str) -> Option<SudokuVariant> {
         let parts: Vec<&str> = data.split(':').collect();
         if parts.len() != 2 {
@@ -130,8 +138,37 @@ impl Variant for KillerCage {
         }
     }
 
-    fn name(&self) -> String {
-        String::from("Killer Cage")
+    fn validate_solution(&self, grid: &crate::SudokuGrid) -> bool {
+        let mut sum = 0;
+        for &(row, col) in &self.cells {
+            let val = grid.get_cell(row, col);
+            if val == 0 {
+                return false; // If any cell is empty, solution is invalid
+            }
+            sum += val as u32;
+        }
+        sum == self.sum
+    }
+
+    fn constrained_cells(&self) -> Vec<(usize, usize)> {
+        self.cells.clone()
+    }
+}
+
+impl std::fmt::Display for KillerCage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::from("Killer Cage [");
+        output.push_str(
+            self.cells
+                .iter()
+                .map(|&(r, c)| format!("({}, {})", r, c))
+                .collect::<Vec<_>>()
+                .join(", ")
+                .as_str(),
+        );
+        output.push_str("] Sum = ");
+        output.push_str(&self.sum.to_string());
+        write!(f, "{}", output)
     }
 }
 

@@ -61,8 +61,40 @@ impl Variant for KropkiDot {
         }
     }
 
-    fn name(&self) -> String {
-        String::from("Kropki Dot")
+    fn validate_solution(&self, grid: &SudokuGrid) -> bool {
+        let val1 = grid.get_cell(self.cells[0].0, self.cells[0].1);
+        let val2 = grid.get_cell(self.cells[1].0, self.cells[1].1);
+
+        // Check both cells are filled
+        if val1 == 0 || val2 == 0 {
+            return false;
+        }
+
+        // Check the relationship is satisfied
+        match self.colour {
+            KropkiColour::Black => val1 * 2 == val2 || val2 * 2 == val1,
+            KropkiColour::White => val1 + 1 == val2 || val1 - 1 == val2,
+        }
+    }
+
+    fn constrained_cells(&self) -> Vec<(usize, usize)> {
+        vec![self.cells[0], self.cells[1]]
+    }
+}
+
+impl std::fmt::Display for KropkiDot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::from("Kropki dot [");
+        output.push_str(
+            self.cells
+                .iter()
+                .map(|&(r, c)| format!("({}, {})", r, c))
+                .collect::<Vec<_>>()
+                .join(", ")
+                .as_str(),
+        );
+        output.push_str(&format!("] {}", self.colour));
+        write!(f, "{}", output)
     }
 }
 
@@ -70,4 +102,13 @@ impl Variant for KropkiDot {
 enum KropkiColour {
     White,
     Black,
+}
+
+impl std::fmt::Display for KropkiColour {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KropkiColour::Black => write!(f, "black"),
+            KropkiColour::White => write!(f, "white"),
+        }
+    }
 }

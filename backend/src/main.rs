@@ -347,6 +347,18 @@ fn kropki_example(do_solve: bool) -> SudokuGrid {
 }
 
 fn draft_day(do_solve: bool) -> SudokuGrid {
+    /*
+    Solution:
+    892675314
+    157943268
+    436182597
+    621457983
+    578391642
+    349826751
+    783564129
+    915238476
+    264719835
+     */
     let mut grid = SudokuGrid::new();
     grid.add_variant(SudokuVariant::Diagonal(Diagonal::new(true)));
     let killer_cages = [
@@ -393,7 +405,7 @@ fn run_solve(grid: &mut SudokuGrid, show_variants: bool, debug: bool) {
     let mut solver = Solver::new(grid);
     if solver.solve(debug) {
         println!("\n<<<<<<<<<<<<<<<<<Solved Sudoku Puzzle>>>>>>>>>>>>>>>>>>>>");
-        grid.display(show_variants);
+        grid.display(false);
     } else {
         println!("\nNo solution found for this Sudoku puzzle");
     }

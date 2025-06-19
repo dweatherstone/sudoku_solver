@@ -80,7 +80,47 @@ impl Variant for QuadrupleCircle {
         true
     }
 
-    fn name(&self) -> String {
-        String::from("Quadruple Circle")
+    fn validate_solution(&self, grid: &crate::SudokuGrid) -> bool {
+        let values: Vec<u8> = self
+            .cells
+            .iter()
+            .map(|&(r, c)| grid.get_cell(r, c))
+            .collect();
+
+        // Check all cells are filled
+        if values.contains(&0) {
+            return false;
+        }
+
+        // Check all required digits are present
+        self.required.iter().all(|&d| values.contains(&d))
+    }
+
+    fn constrained_cells(&self) -> Vec<(usize, usize)> {
+        self.cells.clone()
+    }
+}
+
+impl std::fmt::Display for QuadrupleCircle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::from("Quadruple Circle [");
+        output.push_str(
+            self.cells
+                .iter()
+                .map(|&(r, c)| format!("({}, {})", r, c))
+                .collect::<Vec<_>>()
+                .join(", ")
+                .as_str(),
+        );
+        output.push_str("] required values: [");
+        let required_str = self
+            .required
+            .iter()
+            .map(|req| req.to_string() + ", ")
+            .collect::<String>();
+        let required_str = required_str.trim_end_matches(", ");
+        output.push_str(&required_str);
+        output.push(']');
+        write!(f, "{}", output)
     }
 }

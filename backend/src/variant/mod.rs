@@ -14,5 +14,6 @@ use crate::SudokuGrid;
 
 pub trait Variant {
     fn is_valid(&self, grid: &SudokuGrid, row: usize, col: usize, value: u8) -> bool;
-    fn name(&self) -> String;
+    fn constrained_cells(&self) -> Vec<(usize, usize)>;
+    fn validate_solution(&self, grid: &SudokuGrid) -> bool;
 }
