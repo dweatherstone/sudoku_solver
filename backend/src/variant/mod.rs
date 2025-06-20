@@ -2,12 +2,14 @@ mod diagonal;
 mod killer;
 mod kropki;
 mod quadruple_circles;
+mod renban;
 mod thermometer;
 
 pub use diagonal::Diagonal;
 pub use killer::KillerCage;
 pub use kropki::KropkiDot;
 pub use quadruple_circles::QuadrupleCircle;
+pub use renban::Renban;
 pub use thermometer::Thermometer;
 
 use crate::SudokuGrid;

@@ -3,7 +3,8 @@ use std::{collections::HashSet, io::Error};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Diagonal, KillerCage, KropkiDot, QuadrupleCircle, Thermometer, file_parser, variant::Variant,
+    Diagonal, KillerCage, KropkiDot, QuadrupleCircle, Renban, Thermometer, file_parser,
+    variant::Variant,
 };
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -12,6 +13,7 @@ pub enum SudokuVariant {
     Killer(KillerCage),
     Kropki(KropkiDot),
     QuadrupleCircles(QuadrupleCircle),
+    Renban(Renban),
     Thermometer(Thermometer),
 }
 
@@ -36,6 +38,7 @@ impl SudokuVariant {
             "thermometer" => Thermometer::parse(data),
             "kropki" => KropkiDot::parse(data),
             "quadruple" => QuadrupleCircle::parse(data),
+            "renban" => Renban::parse(data),
             _ => None,
         }
     }
@@ -46,6 +49,7 @@ impl SudokuVariant {
             SudokuVariant::Killer(cage) => cage.is_valid(grid, row, col, value),
             SudokuVariant::Kropki(dot) => dot.is_valid(grid, row, col, value),
             SudokuVariant::QuadrupleCircles(circle) => circle.is_valid(grid, row, col, value),
+            SudokuVariant::Renban(ren) => ren.is_valid(grid, row, col, value),
             SudokuVariant::Thermometer(therm) => therm.is_valid(grid, row, col, value),
         }
     }
@@ -56,6 +60,7 @@ impl SudokuVariant {
             SudokuVariant::Killer(cage) => cage.validate_solution(grid),
             SudokuVariant::Kropki(dot) => dot.validate_solution(grid),
             SudokuVariant::QuadrupleCircles(circle) => circle.validate_solution(grid),
+            SudokuVariant::Renban(ren) => ren.validate_solution(grid),
             SudokuVariant::Thermometer(therm) => therm.validate_solution(grid),
         }
     }
@@ -66,6 +71,7 @@ impl SudokuVariant {
             SudokuVariant::Killer(cage) => cage.constrained_cells(),
             SudokuVariant::Kropki(dot) => dot.constrained_cells(),
             SudokuVariant::QuadrupleCircles(circle) => circle.constrained_cells(),
+            SudokuVariant::Renban(ren) => ren.constrained_cells(),
             SudokuVariant::Thermometer(therm) => therm.constrained_cells(),
         }
     }
@@ -78,6 +84,7 @@ impl std::fmt::Display for SudokuVariant {
             SudokuVariant::Killer(cage) => write!(f, "{}", cage),
             SudokuVariant::Kropki(dot) => write!(f, "{}", dot),
             SudokuVariant::QuadrupleCircles(circle) => write!(f, "{}", circle),
+            SudokuVariant::Renban(ren) => write!(f, "{}", ren),
             SudokuVariant::Thermometer(therm) => write!(f, "{}", therm),
         }
     }
