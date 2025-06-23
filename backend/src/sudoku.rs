@@ -1,15 +1,17 @@
-use std::{collections::HashSet, io::Error};
+use std::{collections::HashSet, io::Error, path::Path};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Diagonal, KillerCage, KropkiDot, QuadrupleCircle, Renban, Thermometer, file_parser,
-    variant::Variant,
+    Arrow, Diagonal, Entropic, KillerCage, KropkiDot, QuadrupleCircle, Renban, Thermometer,
+    file_parser, variant::Variant,
 };
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub enum SudokuVariant {
+    Arrow(Arrow),
     Diagonal(Diagonal),
+    Entropic(Entropic),
     Killer(KillerCage),
     Kropki(KropkiDot),
     QuadrupleCircles(QuadrupleCircle),
@@ -39,6 +41,8 @@ impl SudokuVariant {
             "kropki" => KropkiDot::parse(data),
             "quadruple" => QuadrupleCircle::parse(data),
             "renban" => Renban::parse(data),
+            "entropic" => Entropic::parse(data),
+            "arrow" => Arrow::parse(data),
             _ => None,
         }
     }
@@ -51,6 +55,8 @@ impl SudokuVariant {
             SudokuVariant::QuadrupleCircles(circle) => circle.is_valid(grid, row, col, value),
             SudokuVariant::Renban(ren) => ren.is_valid(grid, row, col, value),
             SudokuVariant::Thermometer(therm) => therm.is_valid(grid, row, col, value),
+            SudokuVariant::Entropic(ent) => ent.is_valid(grid, row, col, value),
+            SudokuVariant::Arrow(arrow) => arrow.is_valid(grid, row, col, value),
         }
     }
 
@@ -62,6 +68,8 @@ impl SudokuVariant {
             SudokuVariant::QuadrupleCircles(circle) => circle.validate_solution(grid),
             SudokuVariant::Renban(ren) => ren.validate_solution(grid),
             SudokuVariant::Thermometer(therm) => therm.validate_solution(grid),
+            SudokuVariant::Entropic(ent) => ent.validate_solution(grid),
+            SudokuVariant::Arrow(arrow) => arrow.validate_solution(grid),
         }
     }
 
@@ -73,6 +81,8 @@ impl SudokuVariant {
             SudokuVariant::QuadrupleCircles(circle) => circle.constrained_cells(),
             SudokuVariant::Renban(ren) => ren.constrained_cells(),
             SudokuVariant::Thermometer(therm) => therm.constrained_cells(),
+            SudokuVariant::Entropic(ent) => ent.constrained_cells(),
+            SudokuVariant::Arrow(arrow) => arrow.constrained_cells(),
         }
     }
 }
@@ -86,6 +96,8 @@ impl std::fmt::Display for SudokuVariant {
             SudokuVariant::QuadrupleCircles(circle) => write!(f, "{}", circle),
             SudokuVariant::Renban(ren) => write!(f, "{}", ren),
             SudokuVariant::Thermometer(therm) => write!(f, "{}", therm),
+            SudokuVariant::Entropic(ent) => write!(f, "{}", ent),
+            SudokuVariant::Arrow(arrow) => write!(f, "{}", arrow),
         }
     }
 }
@@ -155,8 +167,8 @@ impl SudokuGrid {
         None
     }
 
-    pub fn read_from_file(filename: &str) -> Result<Self, Error> {
-        file_parser::parse_file(filename)
+    pub fn read_from_file(path: &Path) -> Result<Self, Error> {
+        file_parser::parse_file(path)
     }
 
     fn used_in_col(&self, col: usize, num: u8) -> bool {

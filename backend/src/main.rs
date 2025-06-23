@@ -8,12 +8,12 @@ use axum::{
     routing::{get, post},
     serve,
 };
-use std::env;
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 use std::sync::Arc;
+use std::{env, path::PathBuf};
 use sudoku_solver::{
     Diagonal, KillerCage, KropkiDot, QuadrupleCircle, Solver, SudokuGrid, SudokuVariant,
-    Thermometer,
+    Thermometer, get_examples_path,
 };
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
@@ -94,22 +94,22 @@ fn main() -> Result<(), Error> {
         //building_blocks(true);
         //quadruple_circles_example(true);
         // kropki_example(true);
-        draft_day(true);
+        // draft_day(true);
+        // ultraviolet(true);
+        triumvirate(true);
         return Ok(());
     }
     let filename = &args[1];
+    let mut path = PathBuf::from(get_examples_path());
+    path.push(filename);
 
-    let mut sudoku_grid = match SudokuGrid::read_from_file(filename) {
-        Ok(grid) => grid,
-        Err(e) => {
-            eprintln!("Error reading sudoku puzzle: {}", e);
-            return Err(Error::other("Falied to read Sudoku puzzle"));
-        }
-    };
+    let mut sudoku_grid = SudokuGrid::read_from_file(&path).map_err(|e| {
+        eprintln!("Error reading sudoku puzzle: {}", e);
+        Error::other("Failed to read Sudoku puzzle")
+    })?;
 
-    //sudoku_grid.display(true);
-
-    run_solve(&mut sudoku_grid, true, false);
+    let display_variants = sudoku_grid.variants().next().is_some();
+    run_solve(&mut sudoku_grid, display_variants, false);
 
     Ok(())
 }
@@ -396,6 +396,32 @@ fn draft_day(do_solve: bool) -> SudokuGrid {
     }
 
     grid
+}
+
+fn ultraviolet(do_solve: bool) {
+    let filename = "ultraviolet.txt";
+    let mut path = PathBuf::from(get_examples_path());
+    path.push(filename);
+
+    let mut grid = SudokuGrid::read_from_file(&path).unwrap();
+
+    if do_solve {
+        run_solve(&mut grid, true, false);
+    }
+}
+
+fn triumvirate(do_solve: bool) {
+    let filename = "triumvirate.txt";
+    let mut path = PathBuf::from(get_examples_path());
+    path.push(filename);
+
+    let mut grid = SudokuGrid::read_from_file(&path).unwrap();
+
+    if do_solve {
+        run_solve(&mut grid, true, true);
+    } else {
+        grid.display(true);
+    }
 }
 
 fn run_solve(grid: &mut SudokuGrid, show_variants: bool, debug: bool) {

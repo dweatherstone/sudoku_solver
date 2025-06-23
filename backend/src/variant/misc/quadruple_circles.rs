@@ -119,7 +119,7 @@ impl std::fmt::Display for QuadrupleCircle {
             .map(|req| req.to_string() + ", ")
             .collect::<String>();
         let required_str = required_str.trim_end_matches(", ");
-        output.push_str(&required_str);
+        output.push_str(required_str);
         output.push(']');
         write!(f, "{}", output)
     }

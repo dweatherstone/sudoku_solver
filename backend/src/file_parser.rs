@@ -1,11 +1,13 @@
 use crate::{SudokuGrid, SudokuVariant};
 use std::{
+    env,
     fs::File,
     io::{BufRead, BufReader, Error, ErrorKind},
+    path::Path,
 };
 
-pub fn parse_file(filename: &str) -> Result<SudokuGrid, Error> {
-    let file = File::open(filename)?;
+pub fn parse_file(path: &Path) -> Result<SudokuGrid, Error> {
+    let file = File::open(path)?;
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
 
@@ -70,16 +72,24 @@ pub fn parse_positions(data: &str) -> Result<Vec<(usize, usize)>, Error> {
     Ok(positions)
 }
 
+pub fn get_examples_path() -> String {
+    env::var("EXAMPLES_DIR").unwrap_or_else(|_| "../examples".to_string())
+}
+
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use crate::{Diagonal, KillerCage, SudokuVariant, Thermometer, file_parser::parse_positions};
 
-    use super::parse_file;
+    use super::{get_examples_path, parse_file};
 
     #[test]
     fn test_read_no_variants() {
         let filename = "sudoku.txt";
-        let grid = parse_file(filename).unwrap();
+        let mut path = PathBuf::from(get_examples_path());
+        path.push(filename);
+        let grid = parse_file(&path).unwrap();
         let expected_grid = [
             [0, 0, 9, 0, 0, 0, 0, 0, 4],
             [0, 2, 4, 0, 9, 0, 0, 0, 0],
@@ -114,7 +124,9 @@ mod tests {
     #[test]
     fn test_read_draft_day() {
         let filename = "draft_day.txt";
-        let grid = parse_file(filename).unwrap();
+        let mut path = PathBuf::from(get_examples_path());
+        path.push(filename);
+        let grid = parse_file(&path).unwrap();
         #[allow(clippy::needless_range_loop)]
         for row in 0..9 {
             for col in 0..9 {

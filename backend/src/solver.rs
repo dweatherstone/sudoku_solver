@@ -20,10 +20,25 @@ impl<'a> Solver<'a> {
     }
 
     pub fn solve(&mut self, debug: bool) -> bool {
-        self.solve_recursive(debug)
+        let mut steps = 0;
+        let max_steps = 1_000_000;
+        let result = self.solve_recursive(debug, &mut steps, max_steps);
+        if debug {
+            println!("Returning '{}' from solve after {} steps", result, steps);
+        }
+        result
     }
 
-    fn solve_recursive(&mut self, debug: bool) -> bool {
+    fn solve_recursive(&mut self, debug: bool, steps: &mut usize, max_steps: usize) -> bool {
+        *steps += 1;
+
+        if *steps > max_steps {
+            if debug {
+                println!("Solver aborted after {} steps (limit reached)", *steps);
+            }
+            return false;
+        }
+
         // Find the next empty cell (if any)
         match self.find_most_constrained_cell(debug) {
             NextCell::Cell(row, col, candidates) => {
@@ -37,7 +52,7 @@ impl<'a> Solver<'a> {
                     if self.sudoku_grid.is_valid_move(row, col, num) {
                         // If valid, set the cell value and recursively solve
                         self.sudoku_grid.set_cell(row, col, num);
-                        if self.solve_recursive(debug) {
+                        if self.solve_recursive(debug, steps, max_steps) {
                             return true;
                         }
                         // If the recursive call returns false, backtrack and try the next digit

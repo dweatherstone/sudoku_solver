@@ -1,16 +1,15 @@
-mod diagonal;
-mod killer;
-mod kropki;
-mod quadruple_circles;
-mod renban;
-mod thermometer;
+mod dot;
+mod line;
+mod misc;
 
-pub use diagonal::Diagonal;
-pub use killer::KillerCage;
-pub use kropki::KropkiDot;
-pub use quadruple_circles::QuadrupleCircle;
-pub use renban::Renban;
-pub use thermometer::Thermometer;
+pub use dot::KropkiDot;
+pub use line::Arrow;
+pub use line::Diagonal;
+pub use line::Entropic;
+pub use line::Renban;
+pub use line::Thermometer;
+pub use misc::KillerCage;
+pub use misc::QuadrupleCircle;
 
 use crate::SudokuGrid;
 
