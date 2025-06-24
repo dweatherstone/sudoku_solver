@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Arrow, Diagonal, Entropic, KillerCage, KropkiDot, QuadrupleCircle, Renban, Thermometer,
-    file_parser, variant::Variant,
+    file_parser,
+    variant::{RegionSum, Variant},
 };
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -15,6 +16,7 @@ pub enum SudokuVariant {
     Killer(KillerCage),
     Kropki(KropkiDot),
     QuadrupleCircles(QuadrupleCircle),
+    RegionSum(RegionSum),
     Renban(Renban),
     Thermometer(Thermometer),
 }
@@ -43,6 +45,7 @@ impl SudokuVariant {
             "renban" => Renban::parse(data),
             "entropic" => Entropic::parse(data),
             "arrow" => Arrow::parse(data),
+            "region sum" => RegionSum::parse(data),
             _ => None,
         }
     }
@@ -57,6 +60,7 @@ impl SudokuVariant {
             SudokuVariant::Thermometer(therm) => therm.is_valid(grid, row, col, value),
             SudokuVariant::Entropic(ent) => ent.is_valid(grid, row, col, value),
             SudokuVariant::Arrow(arrow) => arrow.is_valid(grid, row, col, value),
+            SudokuVariant::RegionSum(rs) => rs.is_valid(grid, row, col, value),
         }
     }
 
@@ -70,6 +74,7 @@ impl SudokuVariant {
             SudokuVariant::Thermometer(therm) => therm.validate_solution(grid),
             SudokuVariant::Entropic(ent) => ent.validate_solution(grid),
             SudokuVariant::Arrow(arrow) => arrow.validate_solution(grid),
+            SudokuVariant::RegionSum(rs) => rs.validate_solution(grid),
         }
     }
 
@@ -83,6 +88,7 @@ impl SudokuVariant {
             SudokuVariant::Thermometer(therm) => therm.constrained_cells(),
             SudokuVariant::Entropic(ent) => ent.constrained_cells(),
             SudokuVariant::Arrow(arrow) => arrow.constrained_cells(),
+            SudokuVariant::RegionSum(rs) => rs.constrained_cells(),
         }
     }
 }
@@ -98,6 +104,7 @@ impl std::fmt::Display for SudokuVariant {
             SudokuVariant::Thermometer(therm) => write!(f, "{}", therm),
             SudokuVariant::Entropic(ent) => write!(f, "{}", ent),
             SudokuVariant::Arrow(arrow) => write!(f, "{}", arrow),
+            SudokuVariant::RegionSum(rs) => write!(f, "{}", rs),
         }
     }
 }
@@ -109,7 +116,7 @@ pub struct SudokuGrid {
 }
 
 impl SudokuGrid {
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         SudokuGrid {
             cells: [[0; 9]; 9],
             variants: Vec::new(),
@@ -264,6 +271,6 @@ impl SudokuGrid {
 
 impl Default for SudokuGrid {
     fn default() -> Self {
-        SudokuGrid::new()
+        SudokuGrid::empty()
     }
 }

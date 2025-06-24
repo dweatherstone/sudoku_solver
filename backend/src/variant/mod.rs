@@ -6,6 +6,7 @@ pub use dot::KropkiDot;
 pub use line::Arrow;
 pub use line::Diagonal;
 pub use line::Entropic;
+pub use line::RegionSum;
 pub use line::Renban;
 pub use line::Thermometer;
 pub use misc::KillerCage;

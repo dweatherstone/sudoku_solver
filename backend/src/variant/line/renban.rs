@@ -124,7 +124,7 @@ mod tests {
     #[test]
     fn test_valid_solution() {
         let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 6);
         grid.set_cell(0, 1, 4);
         grid.set_cell(0, 2, 5);
@@ -137,7 +137,7 @@ mod tests {
     #[test]
     fn test_solution_non_consecutive() {
         let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 6);
         grid.set_cell(0, 1, 4);
         grid.set_cell(0, 2, 7);
@@ -147,7 +147,7 @@ mod tests {
     #[test]
     fn test_solution_duplicate() {
         let renban = Renban::new(vec![(1, 0), (1, 1), (1, 2)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(1, 0, 2);
         grid.set_cell(1, 1, 2);
         grid.set_cell(1, 2, 3);
@@ -157,7 +157,7 @@ mod tests {
     #[test]
     fn test_valid_proposal() {
         let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 1, 4);
         grid.set_cell(0, 2, 5);
         assert!(renban.is_valid(&grid, 0, 0, 6), "Should be valid proposal");
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_invalid_proposal_duplicate() {
         let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 1, 4);
         grid.set_cell(0, 2, 5);
         assert!(!renban.is_valid(&grid, 0, 0, 4), "Would cause a duplicate");
@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn test_invalid_proposal_impossible_sequence() {
         let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 1, 4);
         grid.set_cell(0, 2, 5);
         assert!(
@@ -192,7 +192,7 @@ mod tests {
     #[test]
     fn test_valid_proposal_incomplete() {
         let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2), (0, 3)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 1, 4);
         grid.set_cell(0, 2, 5);
         assert!(renban.is_valid(&grid, 0, 0, 6), "Should be valid proposal");
@@ -204,7 +204,7 @@ mod tests {
     #[test]
     fn test_invalid_proposal_incomplete() {
         let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2), (0, 3)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 1, 4);
         grid.set_cell(0, 2, 5);
         assert!(
@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn test_single_cell_valid() {
         let renban = Renban::new(vec![(4, 4)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(4, 4, 7);
         assert!(renban.validate_solution(&grid));
     }
@@ -246,7 +246,7 @@ mod tests {
             (7, 7),
             (8, 8),
         ]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 3);
         grid.set_cell(1, 1, 4);
         grid.set_cell(2, 2, 5);
@@ -284,7 +284,7 @@ mod tests {
             (0, 6),
             (0, 7),
         ]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 1, 1);
 
         assert!(renban.is_valid(&grid, 0, 2, 2));

@@ -22,13 +22,13 @@ impl KillerCage {
         cage
     }
 
-    pub fn cells(&self) -> &Vec<(usize, usize)> {
-        &self.cells
-    }
+    // pub fn cells(&self) -> &Vec<(usize, usize)> {
+    //     &self.cells
+    // }
 
-    pub fn sum(&self) -> u32 {
-        self.sum
-    }
+    // pub fn sum(&self) -> u32 {
+    //     self.sum
+    // }
 
     pub fn parse(data: &str) -> Option<SudokuVariant> {
         let parts: Vec<&str> = data.split(':').collect();

@@ -145,7 +145,7 @@ mod tests {
             SudokuVariant::Killer(KillerCage::new(vec![(0, 1), (0, 2)], 11)),
             SudokuVariant::Killer(KillerCage::new(vec![(0, 6), (0, 7), (1, 6)], 6)),
             SudokuVariant::Killer(KillerCage::new(vec![(1, 8), (2, 7), (2, 8)], 24)),
-            SudokuVariant::Killer(KillerCage::new(vec![(1, 0), (1, 2)], 5)),
+            SudokuVariant::Killer(KillerCage::new(vec![(1, 0), (2, 0)], 5)),
             SudokuVariant::Killer(KillerCage::new(vec![(4, 3), (5, 3), (5, 4)], 13)),
             SudokuVariant::Killer(KillerCage::new(vec![(6, 0), (6, 1), (7, 0)], 24)),
             SudokuVariant::Killer(KillerCage::new(vec![(6, 7), (6, 8)], 11)),

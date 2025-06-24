@@ -359,7 +359,7 @@ fn draft_day(do_solve: bool) -> SudokuGrid {
     915238476
     264719835
      */
-    let mut grid = SudokuGrid::new();
+    let mut grid = SudokuGrid::empty();
     grid.add_variant(SudokuVariant::Diagonal(Diagonal::new(true)));
     let killer_cages = [
         (vec![(0, 1), (0, 2)], 11),

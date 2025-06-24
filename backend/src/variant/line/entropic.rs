@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn test_solution_valid() {
         let entropic = Entropic::new(vec![(0, 0), (0, 1), (0, 2), (0, 3)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 1);
         grid.set_cell(0, 1, 4);
         grid.set_cell(0, 2, 7);
@@ -146,7 +146,7 @@ mod tests {
     #[test]
     fn test_solution_incomplete() {
         let entropic = Entropic::new(vec![(0, 0), (0, 1), (0, 2), (0, 3)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 1);
         grid.set_cell(0, 1, 4);
         grid.set_cell(0, 2, 7);
@@ -159,7 +159,7 @@ mod tests {
     #[test]
     fn test_solution_wrong_order() {
         let entropic = Entropic::new(vec![(0, 0), (0, 1), (0, 2), (0, 3)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 1);
         grid.set_cell(0, 1, 4);
         grid.set_cell(0, 2, 2);
@@ -173,7 +173,7 @@ mod tests {
     #[test]
     fn test_solution_valid_short() {
         let entropic = Entropic::new(vec![(0, 0), (0, 1)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 1);
         grid.set_cell(0, 1, 2);
         assert!(
@@ -185,7 +185,7 @@ mod tests {
     #[test]
     fn test_solution_all_same_entropy() {
         let entropic = Entropic::new(vec![(1, 0), (1, 1), (1, 2)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(1, 0, 4);
         grid.set_cell(1, 1, 5);
         grid.set_cell(1, 2, 6);
@@ -198,7 +198,7 @@ mod tests {
     #[test]
     fn test_valid_proposal_in_window() {
         let entropic = Entropic::new(vec![(0, 0), (0, 1), (0, 2)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 2);
         grid.set_cell(0, 1, 5);
         assert!(
@@ -210,7 +210,7 @@ mod tests {
     #[test]
     fn test_invalid_duplicate_band_proposal() {
         let entropic = Entropic::new(vec![(0, 0), (0, 1), (0, 2)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 2);
         grid.set_cell(0, 1, 1);
         assert!(
@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn test_invalid_add_same_band_proposal() {
         let entropic = Entropic::new(vec![(0, 0), (0, 1), (0, 2)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 2);
         grid.set_cell(0, 1, 5);
         assert!(
@@ -234,7 +234,7 @@ mod tests {
     #[test]
     fn test_valid_long_line_multiple_windows() {
         let entropic = Entropic::new(vec![(0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (0, 5)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 1); // L
         grid.set_cell(0, 1, 5); // M
         grid.set_cell(0, 2, 7); // H
@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn test_invalid_middle_window_violation() {
         let entropic = Entropic::new(vec![(0, 0), (0, 1), (0, 2), (0, 3)]);
-        let mut grid = SudokuGrid::new();
+        let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 1); // L
         grid.set_cell(0, 1, 5); // M
         grid.set_cell(0, 3, 4); // M
