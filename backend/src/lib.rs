@@ -14,3 +14,4 @@ pub use variant::KropkiDot;
 pub use variant::QuadrupleCircle;
 pub use variant::Renban;
 pub use variant::Thermometer;
+pub use variant::XVDot;

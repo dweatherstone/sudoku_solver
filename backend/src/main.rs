@@ -152,7 +152,7 @@ fn building_blocks(do_solve: bool) -> SudokuGrid {
     ];
     for (cells, required) in circles {
         sudoku_grid.add_variant(SudokuVariant::QuadrupleCircles(QuadrupleCircle::new(
-            cells, required,
+            cells, required, false,
         )));
     }
 
@@ -271,7 +271,7 @@ fn quadruple_circles_example(do_solve: bool) -> SudokuGrid {
     ];
     for (cells, required) in circles {
         sudoku_grid.add_variant(SudokuVariant::QuadrupleCircles(QuadrupleCircle::new(
-            cells, required,
+            cells, required, false,
         )));
     }
     if do_solve {
@@ -411,7 +411,7 @@ fn ultraviolet(do_solve: bool) {
 }
 
 fn triumvirate(do_solve: bool) {
-    let filename = "triumvirate.txt";
+    let filename = "anti_quad5.txt";
     let mut path = PathBuf::from(get_examples_path());
     path.push(filename);
 

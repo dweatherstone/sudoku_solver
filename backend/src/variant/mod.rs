@@ -3,6 +3,7 @@ mod line;
 mod misc;
 
 pub use dot::KropkiDot;
+pub use dot::XVDot;
 pub use line::Arrow;
 pub use line::Diagonal;
 pub use line::Entropic;

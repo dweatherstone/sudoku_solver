@@ -3,7 +3,7 @@ use std::{collections::HashSet, io::Error, path::Path};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Arrow, Diagonal, Entropic, KillerCage, KropkiDot, QuadrupleCircle, Renban, Thermometer,
+    Arrow, Diagonal, Entropic, KillerCage, KropkiDot, QuadrupleCircle, Renban, Thermometer, XVDot,
     file_parser,
     variant::{RegionSum, Variant},
 };
@@ -19,6 +19,7 @@ pub enum SudokuVariant {
     RegionSum(RegionSum),
     Renban(Renban),
     Thermometer(Thermometer),
+    XVDot(XVDot),
 }
 
 impl SudokuVariant {
@@ -41,11 +42,13 @@ impl SudokuVariant {
             "diagonal" => Diagonal::parse(data),
             "thermometer" => Thermometer::parse(data),
             "kropki" => KropkiDot::parse(data),
-            "quadruple" => QuadrupleCircle::parse(data),
+            "quadruple" => QuadrupleCircle::parse(data, false),
+            "anti quadruple" => QuadrupleCircle::parse(data, true),
             "renban" => Renban::parse(data),
             "entropic" => Entropic::parse(data),
             "arrow" => Arrow::parse(data),
             "region sum" => RegionSum::parse(data),
+            "xv" => XVDot::parse(data),
             _ => None,
         }
     }
@@ -61,6 +64,7 @@ impl SudokuVariant {
             SudokuVariant::Entropic(ent) => ent.is_valid(grid, row, col, value),
             SudokuVariant::Arrow(arrow) => arrow.is_valid(grid, row, col, value),
             SudokuVariant::RegionSum(rs) => rs.is_valid(grid, row, col, value),
+            SudokuVariant::XVDot(xv) => xv.is_valid(grid, row, col, value),
         }
     }
 
@@ -75,6 +79,7 @@ impl SudokuVariant {
             SudokuVariant::Entropic(ent) => ent.validate_solution(grid),
             SudokuVariant::Arrow(arrow) => arrow.validate_solution(grid),
             SudokuVariant::RegionSum(rs) => rs.validate_solution(grid),
+            SudokuVariant::XVDot(xv) => xv.validate_solution(grid),
         }
     }
 
@@ -89,6 +94,7 @@ impl SudokuVariant {
             SudokuVariant::Entropic(ent) => ent.constrained_cells(),
             SudokuVariant::Arrow(arrow) => arrow.constrained_cells(),
             SudokuVariant::RegionSum(rs) => rs.constrained_cells(),
+            SudokuVariant::XVDot(xv) => xv.constrained_cells(),
         }
     }
 }
@@ -105,6 +111,7 @@ impl std::fmt::Display for SudokuVariant {
             SudokuVariant::Entropic(ent) => write!(f, "{}", ent),
             SudokuVariant::Arrow(arrow) => write!(f, "{}", arrow),
             SudokuVariant::RegionSum(rs) => write!(f, "{}", rs),
+            SudokuVariant::XVDot(xv) => write!(f, "{}", xv),
         }
     }
 }

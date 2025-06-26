@@ -6,14 +6,19 @@ use crate::{SudokuVariant, file_parser::parse_positions, variant::Variant};
 pub struct QuadrupleCircle {
     cells: Vec<(usize, usize)>,
     required: Vec<u8>,
+    is_anti: bool,
 }
 
 impl QuadrupleCircle {
-    pub fn new(cells: Vec<(usize, usize)>, required: Vec<u8>) -> Self {
-        QuadrupleCircle { cells, required }
+    pub fn new(cells: Vec<(usize, usize)>, required: Vec<u8>, is_anti: bool) -> Self {
+        QuadrupleCircle {
+            cells,
+            required,
+            is_anti,
+        }
     }
 
-    pub fn parse(data: &str) -> Option<SudokuVariant> {
+    pub fn parse(data: &str, is_anti: bool) -> Option<SudokuVariant> {
         let parts: Vec<&str> = data.split(':').collect();
         if parts.len() != 2 {
             return None;
@@ -32,7 +37,7 @@ impl QuadrupleCircle {
             return None;
         }
         Some(SudokuVariant::QuadrupleCircles(QuadrupleCircle::new(
-            cells, required,
+            cells, required, is_anti,
         )))
     }
 }
@@ -43,9 +48,14 @@ impl Variant for QuadrupleCircle {
         if !self.cells.contains(&(row, col)) {
             return true;
         }
-        // If there are 4 required numbers, and value is not one of them, then early return
-        if self.required.len() == 4 && !self.required.contains(&value) {
-            return false;
+        if self.is_anti {
+            // If value is any of the required numbers, then return early
+            return !self.required.contains(&value);
+        } else {
+            // If there are 4 required numbers, and value is not one of them, then early return
+            if self.required.len() == 4 && !self.required.contains(&value) {
+                return false;
+            }
         }
 
         // Build the current set of values in the 4 cells, with the proposed value substituted in
@@ -103,7 +113,11 @@ impl Variant for QuadrupleCircle {
 
 impl std::fmt::Display for QuadrupleCircle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut output = String::from("Quadruple Circle [");
+        let mut output = if self.is_anti {
+            String::from("Anti-Quadruple Circle [")
+        } else {
+            String::from("Quadruple Circle [")
+        };
         output.push_str(
             self.cells
                 .iter()

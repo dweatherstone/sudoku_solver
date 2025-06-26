@@ -294,3 +294,94 @@ Your code is now refactored for clarity, and `console.log` statements have been 
 - If the classes/SVG are present in the DOM.
 
 This will help us pinpoint if the code is running, and if not, where it’s failing. Once we know this, we can fix the display issue and further improve the code structure if needed!
+
+## Question 3: Arrow Sudoku
+
+Cool - that makes perfect sense - thanks!
+My next question is more of a logic based question. This solver is trying to solve sudoku puzzles with popular variants. I have added a few now, but the one I'm working on is Arrows. At the moment (to keep things simple) I am just looking at arrows where the head of the arrow is a single cell (so a value from 1-9 inclusive) that is equal to the sum of the digits on the rest of the arrow. I have a struct Arrow that is defined thus:
+
+```rust
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Arrow {
+    cells: Vec<(usize, usize)>,
+}
+```
+
+And my implementation so far is very simple and is:
+
+```rust
+impl Variant for Arrow {
+    fn is_valid(&self, grid: &crate::SudokuGrid, row: usize, col: usize, value: u8) -> bool {
+        if !self.cells.contains(&(row, col)) {
+            return true;
+        }
+        let mut values = self
+            .cells
+            .iter()
+            .map(|&(r, c)| grid.get_cell(r, c))
+            .collect::<Vec<u8>>();
+
+        // Find the index of (row, col) in the arrow
+        if let Some(pos) = self.cells.iter().position(|&(r, c)| r == row && c == col) {
+            values[pos] = value;
+        }
+
+        let sum = values[0];
+        let body = values.iter().skip(1).collect::<Vec<_>>();
+
+        // if the sum of the body is greater than 9, invalid
+        if body.iter().map(|b| **b).sum::<u8>() > 9 {
+            return false;
+        }
+
+        // If the sum (head) of the arrow hasn't been set yet, assume it's fine... logic to be improved
+        if sum == 0 {
+            return true;
+        }
+
+        // Check that the sum of all filled values on the arrow doesn't exceed the required sum
+        let mut current_sum = 0;
+        let mut empty_cells = 0;
+
+        for &&val in body.iter() {
+            if val == 0 {
+                empty_cells += 1;
+            }
+            current_sum += val;
+        }
+        if empty_cells == 0 {
+            current_sum == sum
+        } else {
+            current_sum < sum
+        }
+    }
+
+    fn validate_solution(&self, grid: &crate::SudokuGrid) -> bool {
+        if self.cells.len() < 2 {
+            return false;
+        }
+        let head = self.cells[0];
+        let sum = grid.get_cell(head.0, head.1);
+        if sum == 0 {
+            return false;
+        }
+        let body_vals = self
+            .cells
+            .iter()
+            .skip(1)
+            .map(|&(r, c)| grid.get_cell(r, c))
+            .collect::<Vec<_>>();
+        if body_vals.contains(&0) {
+            return false;
+        }
+
+        body_vals.iter().sum::<u8>() == sum
+    }
+
+    fn constrained_cells(&self) -> Vec<(usize, usize)> {
+        self.cells.clone()
+    }
+}
+```
+
+Now I think I need more complex logic in the `is_valid`function to narrow down options etc. Can you help me?
