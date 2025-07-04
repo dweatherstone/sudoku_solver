@@ -1,6 +1,6 @@
 use std::{
     cmp::{max, min},
-    collections::HashSet,
+    collections::{HashMap, HashSet},
 };
 
 use serde::{Deserialize, Serialize};
@@ -97,6 +97,15 @@ impl Variant for Renban {
         }
         // Check that the set of values is the same as the expected set based on the min and max values
         HashSet::from_iter(min_val..=max_val) == values
+    }
+
+    fn get_possibilities(
+        &self,
+        grid: &crate::SudokuGrid,
+        row: usize,
+        col: usize,
+    ) -> HashMap<(usize, usize), Vec<u8>> {
+        unimplemented!()
     }
 }
 

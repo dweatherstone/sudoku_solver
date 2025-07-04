@@ -1,4 +1,8 @@
-use std::{collections::HashSet, io::Error, path::Path};
+use std::{
+    collections::{HashMap, HashSet},
+    io::Error,
+    path::Path,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -97,6 +101,26 @@ impl SudokuVariant {
             SudokuVariant::XVDot(xv) => xv.constrained_cells(),
         }
     }
+
+    pub fn get_possibilities(
+        &self,
+        grid: &SudokuGrid,
+        row: usize,
+        col: usize,
+    ) -> HashMap<(usize, usize), Vec<u8>> {
+        match self {
+            SudokuVariant::Diagonal(diag) => diag.get_possibilities(grid, row, col),
+            SudokuVariant::Killer(cage) => cage.get_possibilities(grid, row, col),
+            SudokuVariant::Kropki(dot) => dot.get_possibilities(grid, row, col),
+            SudokuVariant::QuadrupleCircles(circle) => circle.get_possibilities(grid, row, col),
+            SudokuVariant::Renban(ren) => ren.get_possibilities(grid, row, col),
+            SudokuVariant::Thermometer(therm) => therm.get_possibilities(grid, row, col),
+            SudokuVariant::Entropic(ent) => ent.get_possibilities(grid, row, col),
+            SudokuVariant::Arrow(arrow) => arrow.get_possibilities(grid, row, col),
+            SudokuVariant::RegionSum(rs) => rs.get_possibilities(grid, row, col),
+            SudokuVariant::XVDot(xv) => xv.get_possibilities(grid, row, col),
+        }
+    }
 }
 
 impl std::fmt::Display for SudokuVariant {
@@ -119,19 +143,34 @@ impl std::fmt::Display for SudokuVariant {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SudokuGrid {
     cells: [[u8; 9]; 9],
+    possibilities: HashMap<(usize, usize), Vec<u8>>,
     variants: Vec<SudokuVariant>,
 }
 
 impl SudokuGrid {
     pub fn empty() -> Self {
+        let mut possibilities = HashMap::new();
+        for r in 0..9 {
+            for c in 0..9 {
+                possibilities.insert((r, c), (1..=9).collect());
+            }
+        }
         SudokuGrid {
             cells: [[0; 9]; 9],
+            possibilities,
             variants: Vec::new(),
         }
     }
 
     pub fn get_cell(&self, row: usize, col: usize) -> u8 {
         self.cells[row][col]
+    }
+
+    pub fn get_possibilities(&self, row: usize, col: usize) -> Vec<u8> {
+        self.possibilities
+            .get(&(row, col))
+            .unwrap_or(&vec![self.get_cell(row, col)])
+            .clone()
     }
 
     pub fn get_cells(&self) -> [[u8; 9]; 9] {
@@ -144,6 +183,16 @@ impl SudokuGrid {
 
     pub fn set_cell(&mut self, row: usize, col: usize, value: u8) {
         self.cells[row][col] = value;
+        if value == 0 {
+            *self
+                .possibilities
+                .entry((row, col))
+                .or_insert(vec![1, 2, 3, 4, 5, 6, 7, 8, 9]) = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
+        } else {
+            *self.possibilities.entry((row, col)).or_insert(vec![value]) = vec![value];
+        }
+        // Update the possibilities to remove value for the row, column and box, and apply variant logic
+        self.update_possibilities(row, col, value);
     }
 
     pub fn add_variant(&mut self, variant: SudokuVariant) {
@@ -158,14 +207,14 @@ impl SudokuGrid {
                 } else {
                     cell.to_string()
                 };
-                print!("{} ", cell_str);
+                print!("{cell_str} ");
             }
             println!();
         }
         if show_variants {
             println!("Variants:");
             for variant in &self.variants {
-                println!("{}", variant);
+                println!("{variant}");
             }
         }
     }
@@ -273,6 +322,47 @@ impl SudokuGrid {
             }
         }
         true
+    }
+
+    fn update_possibilities(&mut self, row: usize, col: usize, value: u8) {
+        // Remove value from possibilities in the same row
+        for c in 0..9 {
+            if c != col {
+                if let Some(poss) = self.possibilities.get_mut(&(row, c)) {
+                    poss.retain(|&p| p != value);
+                }
+            }
+        }
+        // Remove value from possibilities in the same col
+        for r in 0..9 {
+            if r != row {
+                if let Some(poss) = self.possibilities.get_mut(&(r, col)) {
+                    poss.retain(|&p| p != value);
+                }
+            }
+        }
+        // Remove value from possibilities in the same box
+        let box_row = row / 3 * 3;
+        let box_col = col / 3 * 3;
+        for r in box_row..box_row + 3 {
+            for c in box_col..box_col + 3 {
+                if r != row || c != col {
+                    if let Some(poss) = self.possibilities.get_mut(&(r, c)) {
+                        poss.retain(|&p| p != value);
+                    }
+                }
+            }
+        }
+        // Now apply variant constraints to further reduce possibilies
+        for variant in &self.variants {
+            if variant.constrained_cells().contains(&(row, col)) {
+                for (&(r, c), var_poss) in variant.get_possibilities(&self, row, col).iter() {
+                    if let Some(poss) = self.possibilities.get_mut(&(r, c)) {
+                        poss.retain(|p| var_poss.contains(p));
+                    }
+                }
+            }
+        }
     }
 }
 

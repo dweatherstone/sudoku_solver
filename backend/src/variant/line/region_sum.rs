@@ -172,6 +172,15 @@ impl Variant for RegionSum {
             .flat_map(|cells| cells.clone())
             .collect()
     }
+
+    fn get_possibilities(
+        &self,
+        grid: &crate::SudokuGrid,
+        row: usize,
+        col: usize,
+    ) -> HashMap<(usize, usize), Vec<u8>> {
+        unimplemented!()
+    }
 }
 
 impl Display for RegionSum {

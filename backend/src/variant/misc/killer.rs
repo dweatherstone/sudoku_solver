@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -152,6 +152,15 @@ impl Variant for KillerCage {
 
     fn constrained_cells(&self) -> Vec<(usize, usize)> {
         self.cells.clone()
+    }
+
+    fn get_possibilities(
+        &self,
+        grid: &crate::SudokuGrid,
+        row: usize,
+        col: usize,
+    ) -> HashMap<(usize, usize), Vec<u8>> {
+        unimplemented!()
     }
 }
 

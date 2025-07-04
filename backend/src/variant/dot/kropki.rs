@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use serde::{Deserialize, Serialize};
 
 use crate::{SudokuGrid, SudokuVariant, file_parser::parse_positions, variant::Variant};
@@ -79,6 +81,58 @@ impl Variant for KropkiDot {
 
     fn constrained_cells(&self) -> Vec<(usize, usize)> {
         vec![self.cells[0], self.cells[1]]
+    }
+
+    fn get_possibilities(
+        &self,
+        grid: &SudokuGrid,
+        row: usize,
+        col: usize,
+    ) -> HashMap<(usize, usize), Vec<u8>> {
+        // If (row, col) is not on the dot, just pass
+        if !self.cells.contains(&(row, col)) {
+            return HashMap::new();
+        }
+
+        let value = grid.get_cell(row, col);
+        if value == 0 {
+            return HashMap::new();
+        }
+
+        let [(r1, c1), (r2, c2)] = self.cells;
+
+        let (other_row, other_col) = if (row, col) == (r1, c1) {
+            (r2, c2)
+        } else {
+            (r1, c1)
+        };
+
+        if grid.get_cell(other_row, other_col) != 0 {
+            return HashMap::new();
+        }
+
+        let mut values = HashSet::new();
+        match self.colour {
+            KropkiColour::Black => {
+                if value * 2 <= 9 {
+                    values.insert(value * 2);
+                }
+                if value % 2 == 0 {
+                    values.insert(value / 2);
+                }
+            }
+            KropkiColour::White => {
+                if value <= 8 {
+                    values.insert(value + 1);
+                }
+                if value >= 2 {
+                    values.insert(value - 1);
+                }
+            }
+        }
+        let mut result = HashMap::new();
+        result.insert((other_row, other_col), values.into_iter().collect());
+        result
     }
 }
 

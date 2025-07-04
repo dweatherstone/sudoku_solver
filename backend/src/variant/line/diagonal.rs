@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -60,6 +60,39 @@ impl Variant for Diagonal {
 
     fn constrained_cells(&self) -> Vec<(usize, usize)> {
         self.cells.clone()
+    }
+
+    fn get_possibilities(
+        &self,
+        grid: &crate::SudokuGrid,
+        row: usize,
+        col: usize,
+    ) -> HashMap<(usize, usize), Vec<u8>> {
+        // If (row, col) is not on the line, just pass
+        if !self.cells.contains(&(row, col)) {
+            return HashMap::new();
+        }
+
+        let known_cells: HashSet<u8> = self
+            .cells
+            .iter()
+            .map(|&(r, c)| grid.get_cell(r, c))
+            .filter(|&v| v != 0)
+            .collect();
+        let possible_cells: Vec<u8> = (1..=9).filter(|v| !known_cells.contains(v)).collect();
+        let mut possibilities = HashMap::new();
+        for &(r, c) in self.cells.iter() {
+            if r == row && c == col {
+                continue;
+            }
+            let val = grid.get_cell(r, c);
+            if val == 0 {
+                possibilities.insert((r, c), possible_cells.clone());
+            } else {
+                possibilities.insert((r, c), vec![val]);
+            }
+        }
+        possibilities
     }
 }
 

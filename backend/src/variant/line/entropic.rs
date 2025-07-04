@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -93,6 +93,76 @@ impl Variant for Entropic {
     fn constrained_cells(&self) -> Vec<(usize, usize)> {
         self.cells.clone()
     }
+
+    fn get_possibilities(
+        &self,
+        grid: &crate::SudokuGrid,
+        row: usize,
+        col: usize,
+    ) -> HashMap<(usize, usize), Vec<u8>> {
+        // If (row, col) is not on the line, just pass
+        if !self.cells.contains(&(row, col)) {
+            return HashMap::new();
+        }
+
+        if to_entropy(grid.get_cell(row, col)).is_none() {
+            return HashMap::new();
+        }
+
+        // Step 1: For each mod-3 group, determine if any cell is set, and if so, which entropy
+        let mut group_entropy: [Option<Entropy>; 3] = [None, None, None];
+        for (i, &(r, c)) in self.cells.iter().enumerate() {
+            let val = grid.get_cell(r, c);
+            if val == 0 {
+                continue;
+            }
+            if let Some(entropy) = to_entropy(val) {
+                let group = i % 3;
+                if let Some(existing) = group_entropy[group] {
+                    if existing != entropy {
+                        // Contradiction: two different entropies in the same group
+                        // TODO: Make this an error at some point!
+                        println!("Contradiction in group {group}: {existing:?} vs {entropy:?}");
+                        return HashMap::new();
+                    }
+                } else {
+                    group_entropy[group] = Some(entropy);
+                }
+            }
+        }
+
+        // Step 2: Assign remaining entropies to unassigned groups
+        let used: Vec<Entropy> = group_entropy.iter().filter_map(|&e| e).collect();
+        let unused: Vec<Entropy> = [Entropy::Low, Entropy::Medium, Entropy::High]
+            .iter()
+            .copied()
+            .filter(|e| !used.contains(e))
+            .collect();
+
+        // Step 3: For each empty cell, only allow digits from its group's assigned entropy,
+        // or, if not assigned, from all unused entropies
+        let mut possibilities = HashMap::new();
+        for (i, &(r, c)) in self.cells.iter().enumerate() {
+            if grid.get_cell(r, c) != 0 {
+                continue;
+            }
+            let group = i % 3;
+            if let Some(entropy) = group_entropy[group] {
+                possibilities.insert((r, c), entropy.digit_range());
+            } else {
+                // Union of all unused entropies
+                let mut digits = Vec::new();
+                for e in &unused {
+                    digits.extend(e.digit_range());
+                }
+                digits.sort();
+                digits.dedup();
+                possibilities.insert((r, c), digits);
+            }
+        }
+
+        possibilities
+    }
 }
 
 impl std::fmt::Display for Entropic {
@@ -101,20 +171,35 @@ impl std::fmt::Display for Entropic {
         output.push_str(
             self.cells
                 .iter()
-                .map(|&(r, c)| format!("({}, {})", r, c))
+                .map(|&(r, c)| format!("({r}, {c})"))
                 .collect::<Vec<_>>()
                 .join(", ")
                 .as_str(),
         );
-        write!(f, "{}", output)
+        write!(f, "{output}")
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Hash, Copy)]
+// fn intersect_vecs(a: &[u8], b: &[u8]) -> Vec<u8> {
+//     let set_b: HashSet<_> = b.iter().copied().collect();
+//     a.iter().copied().filter(|x| set_b.contains(x)).collect()
+// }
+
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Copy)]
 enum Entropy {
     Low,
     Medium,
     High,
+}
+
+impl Entropy {
+    fn digit_range(&self) -> Vec<u8> {
+        match self {
+            Entropy::Low => vec![1, 2, 3],
+            Entropy::Medium => vec![4, 5, 6],
+            Entropy::High => vec![7, 8, 9],
+        }
+    }
 }
 
 fn to_entropy(value: u8) -> Option<Entropy> {
@@ -257,5 +342,17 @@ mod tests {
             !entropic.is_valid(&grid, 0, 2, 2),
             "High digit expected - invalid"
         );
+    }
+
+    #[test]
+    fn test_basic_get_possibilities() {
+        let line = Entropic::new(vec![(1, 1), (1, 2), (1, 3), (1, 4)]);
+        let mut grid = SudokuGrid::empty();
+        grid.set_cell(1, 1, 1); // Low value
+        grid.set_cell(1, 3, 6); // Medium value
+        let result = line.get_possibilities(&grid, 1, 3);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result.get(&(1, 2)).unwrap(), &vec![7, 8, 9]);
+        assert_eq!(result.get(&(1, 4)).unwrap(), &vec![1, 2, 3]);
     }
 }

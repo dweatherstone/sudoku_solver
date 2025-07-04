@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 use serde::{Deserialize, Serialize};
 
@@ -81,6 +81,41 @@ impl Variant for XVDot {
 
     fn constrained_cells(&self) -> Vec<(usize, usize)> {
         vec![self.cells[0], self.cells[1]]
+    }
+
+    fn get_possibilities(
+        &self,
+        grid: &crate::SudokuGrid,
+        row: usize,
+        col: usize,
+    ) -> std::collections::HashMap<(usize, usize), Vec<u8>> {
+        // If (row, col) is not on the dot, just pass
+        if !self.cells.contains(&(row, col)) {
+            return HashMap::new();
+        }
+        let value = grid.get_cell(row, col);
+        if value == 0 {
+            return HashMap::new();
+        }
+
+        let [(r1, c1), (r2, c2)] = self.cells;
+        let (other_row, other_col) = if (row, col) == (r1, c1) {
+            (r2, c2)
+        } else {
+            (r1, c1)
+        };
+
+        if grid.get_cell(other_row, other_col) != 0 {
+            return HashMap::new();
+        }
+
+        let other_value = match self.flavour {
+            XVFlavour::V => 5 - value,
+            XVFlavour::X => 10 - value,
+        };
+        let mut result = HashMap::new();
+        result.insert((other_row, other_col), vec![other_value]);
+        result
     }
 }
 
