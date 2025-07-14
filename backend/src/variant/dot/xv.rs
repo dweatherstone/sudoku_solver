@@ -124,7 +124,7 @@ impl fmt::Display for XVDot {
         let cell_str = self
             .cells
             .iter()
-            .map(|&(r, c)| format!("({}, {})", r, c))
+            .map(|&(r, c)| format!("({r}, {c})"))
             .collect::<Vec<_>>()
             .join(", ");
         write!(f, "XVDot: [{}], {}", cell_str, self.flavour)

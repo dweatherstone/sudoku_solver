@@ -105,7 +105,65 @@ impl Variant for Renban {
         row: usize,
         col: usize,
     ) -> HashMap<(usize, usize), Vec<u8>> {
-        unimplemented!()
+        if !self.cells.contains(&(row, col)) {
+            return HashMap::new();
+        }
+
+        let mut known: HashMap<(usize, usize), u8> = HashMap::new();
+        for &(r, c) in &self.cells {
+            let val = grid.get_cell(r, c);
+            if val != 0 {
+                // Duplicate check
+                if known.values().any(|&v| v == val) {
+                    return HashMap::new();
+                }
+                known.insert((r, c), val);
+            }
+        }
+
+        let known_values: HashSet<u8> = known.values().copied().collect();
+        let line_len = self.cells.len() as u8;
+
+        // Check for invalid spread
+        if known_values.len() > 1 {
+            let min = *known_values.iter().min().unwrap();
+            let max = *known_values.iter().max().unwrap();
+            if max - min + 1 > line_len {
+                return HashMap::new();
+            }
+        }
+
+        // Generate all valid renban ranges of required length
+        let mut valid_sets: Vec<HashSet<u8>> = Vec::new();
+        for start in 1..=(10 - line_len) {
+            let candidate: HashSet<u8> = (start..start + line_len).collect();
+            if known_values.is_subset(&candidate) {
+                valid_sets.push(candidate);
+            }
+        }
+
+        // Union of all possible values from those sets (excluding known)
+        let mut allowed_values = HashSet::new();
+        for s in &valid_sets {
+            for v in s {
+                if !known_values.contains(v) {
+                    allowed_values.insert(*v);
+                }
+            }
+        }
+
+        let mut possibilities = HashMap::new();
+        for &(r, c) in &self.cells {
+            if grid.get_cell(r, c) != 0 {
+                continue;
+            }
+            possibilities.insert((r, c), {
+                let mut v: Vec<u8> = allowed_values.iter().copied().collect();
+                v.sort_unstable();
+                v
+            });
+        }
+        possibilities
     }
 }
 
@@ -115,12 +173,12 @@ impl std::fmt::Display for Renban {
         output.push_str(
             self.cells
                 .iter()
-                .map(|&(r, c)| format!("({}, {})", r, c))
+                .map(|&(r, c)| format!("({r}, {c})"))
                 .collect::<Vec<_>>()
                 .join(", ")
                 .as_str(),
         );
-        write!(f, "{}", output)
+        write!(f, "{output}")
     }
 }
 
@@ -129,6 +187,83 @@ mod tests {
     use crate::{SudokuGrid, variant::Variant};
 
     use super::Renban;
+
+    #[test]
+    fn test_get_possibilities_basic() {
+        let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)]);
+        let mut grid = SudokuGrid::empty();
+        grid.set_cell(0, 0, 3);
+        let result = renban.get_possibilities(&grid, 0, 0);
+        let expected: Vec<u8> = vec![1, 2, 4, 5, 6, 7];
+        assert_eq!(result.len(), 4);
+        for c in 1..5 {
+            assert_eq!(result.get(&(0, c)).unwrap(), &expected);
+        }
+    }
+
+    #[test]
+    fn test_get_possibilities_two_givens() {
+        let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2), (0, 3)]);
+        let mut grid = SudokuGrid::empty();
+        grid.set_cell(0, 0, 5);
+        grid.set_cell(0, 3, 6);
+        let result = renban.get_possibilities(&grid, 0, 3);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result.get(&(0, 1)).unwrap(), &vec![3, 4, 7, 8]);
+        assert_eq!(result.get(&(0, 2)).unwrap(), &vec![3, 4, 7, 8]);
+    }
+
+    #[test]
+    fn test_get_possibilities_fully_known_line() {
+        let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2)]);
+        let mut grid = SudokuGrid::empty();
+        grid.set_cell(0, 0, 3);
+        grid.set_cell(0, 1, 2);
+        grid.set_cell(0, 2, 4);
+        let result = renban.get_possibilities(&grid, 0, 2);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_get_possibilities_impossible_range() {
+        let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2)]);
+        let mut grid = SudokuGrid::empty();
+        grid.set_cell(0, 0, 1);
+        grid.set_cell(0, 1, 5);
+        let result = renban.get_possibilities(&grid, 0, 1);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_get_possibilities_duplicates_on_line() {
+        let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2)]);
+        let mut grid = SudokuGrid::empty();
+        grid.set_cell(0, 0, 5);
+        grid.set_cell(0, 1, 5);
+        let result = renban.get_possibilities(&grid, 0, 1);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_get_possibilities_edge_of_range() {
+        let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2)]);
+        let mut grid = SudokuGrid::empty();
+        grid.set_cell(0, 1, 9);
+        let result = renban.get_possibilities(&grid, 0, 1);
+        assert_eq!(result.get(&(0, 0)).unwrap(), &vec![7, 8]);
+        assert_eq!(result.get(&(0, 2)).unwrap(), &vec![7, 8]);
+    }
+
+    #[test]
+    fn test_get_possibilities_highly_constrained() {
+        let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2)]);
+        let mut grid = SudokuGrid::empty();
+        grid.set_cell(0, 0, 2);
+        grid.set_cell(0, 1, 4);
+        let result = renban.get_possibilities(&grid, 0, 1);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.get(&(0, 2)).unwrap(), &vec![3]);
+    }
 
     #[test]
     fn test_valid_solution() {

@@ -375,11 +375,11 @@ mod tests {
                 }
             }
         }
-        let mut expected_01 = possible_pairs
+        let expected_01 = possible_pairs
             .iter()
             .map(|(a, _)| *a)
             .collect::<HashSet<_>>();
-        let mut expected_02 = possible_pairs
+        let expected_02 = possible_pairs
             .iter()
             .map(|(_, b)| *b)
             .collect::<HashSet<_>>();

@@ -142,13 +142,13 @@ impl std::fmt::Display for KropkiDot {
         output.push_str(
             self.cells
                 .iter()
-                .map(|&(r, c)| format!("({}, {})", r, c))
+                .map(|&(r, c)| format!("({r}, {c})"))
                 .collect::<Vec<_>>()
                 .join(", ")
                 .as_str(),
         );
         output.push_str(&format!("] {}", self.colour));
-        write!(f, "{}", output)
+        write!(f, "{output}")
     }
 }
 

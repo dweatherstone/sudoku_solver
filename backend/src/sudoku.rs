@@ -126,16 +126,16 @@ impl SudokuVariant {
 impl std::fmt::Display for SudokuVariant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SudokuVariant::Diagonal(diag) => write!(f, "{}", diag),
-            SudokuVariant::Killer(cage) => write!(f, "{}", cage),
-            SudokuVariant::Kropki(dot) => write!(f, "{}", dot),
-            SudokuVariant::QuadrupleCircles(circle) => write!(f, "{}", circle),
-            SudokuVariant::Renban(ren) => write!(f, "{}", ren),
-            SudokuVariant::Thermometer(therm) => write!(f, "{}", therm),
-            SudokuVariant::Entropic(ent) => write!(f, "{}", ent),
-            SudokuVariant::Arrow(arrow) => write!(f, "{}", arrow),
-            SudokuVariant::RegionSum(rs) => write!(f, "{}", rs),
-            SudokuVariant::XVDot(xv) => write!(f, "{}", xv),
+            SudokuVariant::Diagonal(diag) => write!(f, "{diag}"),
+            SudokuVariant::Killer(cage) => write!(f, "{cage}"),
+            SudokuVariant::Kropki(dot) => write!(f, "{dot}"),
+            SudokuVariant::QuadrupleCircles(circle) => write!(f, "{circle}"),
+            SudokuVariant::Renban(ren) => write!(f, "{ren}"),
+            SudokuVariant::Thermometer(therm) => write!(f, "{therm}"),
+            SudokuVariant::Entropic(ent) => write!(f, "{ent}"),
+            SudokuVariant::Arrow(arrow) => write!(f, "{arrow}"),
+            SudokuVariant::RegionSum(rs) => write!(f, "{rs}"),
+            SudokuVariant::XVDot(xv) => write!(f, "{xv}"),
         }
     }
 }
