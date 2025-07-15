@@ -13,5 +13,6 @@ pub use variant::KillerCage;
 pub use variant::KropkiDot;
 pub use variant::QuadrupleCircle;
 pub use variant::Renban;
+pub use variant::Shaded;
 pub use variant::Thermometer;
 pub use variant::XVDot;

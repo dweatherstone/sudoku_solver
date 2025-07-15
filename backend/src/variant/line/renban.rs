@@ -169,16 +169,13 @@ impl Variant for Renban {
 
 impl std::fmt::Display for Renban {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut output = String::from("Renban Line [");
-        output.push_str(
-            self.cells
-                .iter()
-                .map(|&(r, c)| format!("({r}, {c})"))
-                .collect::<Vec<_>>()
-                .join(", ")
-                .as_str(),
-        );
-        write!(f, "{output}")
+        let cells_str = self
+            .cells
+            .iter()
+            .map(|&(r, c)| format!("({r}, {c})"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        write!(f, "Renban Line [{cells_str}]")
     }
 }
 

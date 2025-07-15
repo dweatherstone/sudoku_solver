@@ -7,9 +7,9 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Arrow, Diagonal, Entropic, KillerCage, KropkiDot, QuadrupleCircle, Renban, Thermometer, XVDot,
-    file_parser,
-    variant::{RegionSum, Variant},
+    Arrow, Diagonal, Entropic, KillerCage, KropkiDot, QuadrupleCircle, Renban, Shaded, Thermometer,
+    XVDot, file_parser,
+    variant::{GermanWhisper, RegionSum, Variant},
 };
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -24,6 +24,8 @@ pub enum SudokuVariant {
     Renban(Renban),
     Thermometer(Thermometer),
     XVDot(XVDot),
+    GermanWhisper(GermanWhisper),
+    Shaded(Shaded),
 }
 
 impl SudokuVariant {
@@ -53,6 +55,8 @@ impl SudokuVariant {
             "arrow" => Arrow::parse(data),
             "region sum" => RegionSum::parse(data),
             "xv" => XVDot::parse(data),
+            "german whisper" => GermanWhisper::parse(data),
+            "shaded" => Shaded::parse(data),
             _ => None,
         }
     }
@@ -69,6 +73,8 @@ impl SudokuVariant {
             SudokuVariant::Arrow(arrow) => arrow.is_valid(grid, row, col, value),
             SudokuVariant::RegionSum(rs) => rs.is_valid(grid, row, col, value),
             SudokuVariant::XVDot(xv) => xv.is_valid(grid, row, col, value),
+            SudokuVariant::GermanWhisper(gw) => gw.is_valid(grid, row, col, value),
+            SudokuVariant::Shaded(s) => s.is_valid(grid, row, col, value),
         }
     }
 
@@ -84,6 +90,8 @@ impl SudokuVariant {
             SudokuVariant::Arrow(arrow) => arrow.validate_solution(grid),
             SudokuVariant::RegionSum(rs) => rs.validate_solution(grid),
             SudokuVariant::XVDot(xv) => xv.validate_solution(grid),
+            SudokuVariant::GermanWhisper(gw) => gw.validate_solution(grid),
+            SudokuVariant::Shaded(s) => s.validate_solution(grid),
         }
     }
 
@@ -99,6 +107,8 @@ impl SudokuVariant {
             SudokuVariant::Arrow(arrow) => arrow.constrained_cells(),
             SudokuVariant::RegionSum(rs) => rs.constrained_cells(),
             SudokuVariant::XVDot(xv) => xv.constrained_cells(),
+            SudokuVariant::GermanWhisper(gw) => gw.constrained_cells(),
+            SudokuVariant::Shaded(s) => s.constrained_cells(),
         }
     }
 
@@ -119,6 +129,8 @@ impl SudokuVariant {
             SudokuVariant::Arrow(arrow) => arrow.get_possibilities(grid, row, col),
             SudokuVariant::RegionSum(rs) => rs.get_possibilities(grid, row, col),
             SudokuVariant::XVDot(xv) => xv.get_possibilities(grid, row, col),
+            SudokuVariant::GermanWhisper(gw) => gw.get_possibilities(grid, row, col),
+            SudokuVariant::Shaded(s) => s.get_possibilities(grid, row, col),
         }
     }
 }
@@ -136,6 +148,8 @@ impl std::fmt::Display for SudokuVariant {
             SudokuVariant::Arrow(arrow) => write!(f, "{arrow}"),
             SudokuVariant::RegionSum(rs) => write!(f, "{rs}"),
             SudokuVariant::XVDot(xv) => write!(f, "{xv}"),
+            SudokuVariant::GermanWhisper(gw) => write!(f, "{gw}"),
+            SudokuVariant::Shaded(s) => write!(f, "{s}"),
         }
     }
 }

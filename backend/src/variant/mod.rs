@@ -9,11 +9,13 @@ pub use dot::XVDot;
 pub use line::Arrow;
 pub use line::Diagonal;
 pub use line::Entropic;
+pub use line::GermanWhisper;
 pub use line::RegionSum;
 pub use line::Renban;
 pub use line::Thermometer;
 pub use misc::KillerCage;
 pub use misc::QuadrupleCircle;
+pub use misc::Shaded;
 
 use crate::SudokuGrid;
 
