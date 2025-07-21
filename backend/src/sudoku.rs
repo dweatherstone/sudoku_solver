@@ -7,8 +7,8 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Arrow, Diagonal, Entropic, KillerCage, KropkiDot, QuadrupleCircle, Renban, Shaded, Thermometer,
-    XVDot, file_parser,
+    Arrow, Diagonal, Entropic, KillerCage, KropkiDot, Nabner, QuadrupleCircle, Renban, Shaded,
+    Thermometer, XVDot, file_parser,
     variant::{GermanWhisper, RegionSum, Variant},
 };
 
@@ -26,6 +26,7 @@ pub enum SudokuVariant {
     XVDot(XVDot),
     GermanWhisper(GermanWhisper),
     Shaded(Shaded),
+    Nabner(Nabner),
 }
 
 impl SudokuVariant {
@@ -57,6 +58,7 @@ impl SudokuVariant {
             "xv" => XVDot::parse(data),
             "german whisper" => GermanWhisper::parse(data),
             "shaded" => Shaded::parse(data),
+            "nabner" => Nabner::parse(data),
             _ => None,
         }
     }
@@ -75,6 +77,7 @@ impl SudokuVariant {
             SudokuVariant::XVDot(xv) => xv.is_valid(grid, row, col, value),
             SudokuVariant::GermanWhisper(gw) => gw.is_valid(grid, row, col, value),
             SudokuVariant::Shaded(s) => s.is_valid(grid, row, col, value),
+            SudokuVariant::Nabner(n) => n.is_valid(grid, row, col, value),
         }
     }
 
@@ -92,6 +95,7 @@ impl SudokuVariant {
             SudokuVariant::XVDot(xv) => xv.validate_solution(grid),
             SudokuVariant::GermanWhisper(gw) => gw.validate_solution(grid),
             SudokuVariant::Shaded(s) => s.validate_solution(grid),
+            SudokuVariant::Nabner(n) => n.validate_solution(grid),
         }
     }
 
@@ -109,6 +113,7 @@ impl SudokuVariant {
             SudokuVariant::XVDot(xv) => xv.constrained_cells(),
             SudokuVariant::GermanWhisper(gw) => gw.constrained_cells(),
             SudokuVariant::Shaded(s) => s.constrained_cells(),
+            SudokuVariant::Nabner(n) => n.constrained_cells(),
         }
     }
 
@@ -131,6 +136,7 @@ impl SudokuVariant {
             SudokuVariant::XVDot(xv) => xv.get_possibilities(grid, row, col),
             SudokuVariant::GermanWhisper(gw) => gw.get_possibilities(grid, row, col),
             SudokuVariant::Shaded(s) => s.get_possibilities(grid, row, col),
+            SudokuVariant::Nabner(n) => n.get_possibilities(grid, row, col),
         }
     }
 }
@@ -150,6 +156,7 @@ impl std::fmt::Display for SudokuVariant {
             SudokuVariant::XVDot(xv) => write!(f, "{xv}"),
             SudokuVariant::GermanWhisper(gw) => write!(f, "{gw}"),
             SudokuVariant::Shaded(s) => write!(f, "{s}"),
+            SudokuVariant::Nabner(n) => write!(f, "{n}"),
         }
     }
 }
@@ -297,8 +304,8 @@ impl SudokuGrid {
         // Check columns
         for col in 0..9 {
             let mut column = [0u8; 9];
-            for row in 0..9 {
-                column[row] = self.cells[row][col];
+            for (row, value) in column.iter_mut().enumerate() {
+                *value = self.cells[row][col];
             }
             if !Self::is_valid_group(&column) {
                 return false;
@@ -370,7 +377,7 @@ impl SudokuGrid {
         // Now apply variant constraints to further reduce possibilies
         for variant in &self.variants {
             if variant.constrained_cells().contains(&(row, col)) {
-                for (&(r, c), var_poss) in variant.get_possibilities(&self, row, col).iter() {
+                for (&(r, c), var_poss) in variant.get_possibilities(self, row, col).iter() {
                     if let Some(poss) = self.possibilities.get_mut(&(r, c)) {
                         poss.retain(|p| var_poss.contains(p));
                     }

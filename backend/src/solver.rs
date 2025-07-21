@@ -24,7 +24,7 @@ impl<'a> Solver<'a> {
         let max_steps = 1_000_000;
         let result = self.solve_recursive(debug, &mut steps, max_steps);
         if debug {
-            println!("Returning '{}' from solve after {} steps", result, steps);
+            println!("Returning '{result}' from solve after {steps} steps");
         }
         result
     }
@@ -45,7 +45,7 @@ impl<'a> Solver<'a> {
                 // Try filling the cell with each possible digit
                 for &num in &candidates {
                     if debug {
-                        println!("Trying value {} at cell ({}, {})", num, row, col);
+                        println!("Trying value {num} at cell ({row}, {col})");
                     }
 
                     // Check if the current digit is valid for the cell
@@ -57,7 +57,7 @@ impl<'a> Solver<'a> {
                         }
                         // If the recursive call returns false, backtrack and try the next digit
                         if debug {
-                            println!("Backtracking from value {} at cell ({}, {})", num, row, col);
+                            println!("Backtracking from value {num} at cell ({row}, {col})");
                         }
                         self.sudoku_grid.set_cell(row, col, 0);
                     }
@@ -100,8 +100,7 @@ impl<'a> Solver<'a> {
                     if candidates.is_empty() {
                         if debug {
                             println!(
-                                "WARNING: Cell ({}, {}) has NO candidates! Will backtrack.",
-                                row, col
+                                "WARNING: Cell ({row}, {col}) has NO candidates! Will backtrack."
                             );
                         }
                         return NextCell::DeadEnd;

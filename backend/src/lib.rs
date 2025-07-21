@@ -11,6 +11,7 @@ pub use variant::Diagonal;
 pub use variant::Entropic;
 pub use variant::KillerCage;
 pub use variant::KropkiDot;
+pub use variant::Nabner;
 pub use variant::QuadrupleCircle;
 pub use variant::Renban;
 pub use variant::Shaded;

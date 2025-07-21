@@ -104,7 +104,7 @@ fn main() -> Result<(), Error> {
     path.push(filename);
 
     let mut sudoku_grid = SudokuGrid::read_from_file(&path).map_err(|e| {
-        eprintln!("Error reading sudoku puzzle: {}", e);
+        eprintln!("Error reading sudoku puzzle: {e}");
         Error::other("Failed to read Sudoku puzzle")
     })?;
 

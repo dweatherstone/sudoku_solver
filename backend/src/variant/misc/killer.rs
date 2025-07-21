@@ -253,7 +253,7 @@ impl std::fmt::Display for KillerCage {
         let cell_str = self
             .cells
             .iter()
-            .map(|&(r, c)| format!("({r}, {c}"))
+            .map(|&(r, c)| format!("({r}, {c})"))
             .collect::<Vec<_>>()
             .join(", ");
         write!(

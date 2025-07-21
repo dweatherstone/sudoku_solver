@@ -266,8 +266,8 @@ impl Variant for RegionSum {
 
             for &(r, c) in &unknown_cells {
                 let mut range = HashSet::new();
-                let possible_sums = if target_sum.is_some() {
-                    std::iter::once(target_sum.unwrap()).collect()
+                let possible_sums = if let Some(ts) = target_sum {
+                    std::iter::once(ts).collect()
                 } else {
                     candidate_sums.clone()
                 };

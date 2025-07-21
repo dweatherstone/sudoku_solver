@@ -155,15 +155,15 @@ impl Variant for QuadrupleCircle {
         if !self.is_anti {
             // If there is no space to fit the required values, return early
             if empty_cell_count < missing_required_digits.len() {
-                return HashMap::new();
+                HashMap::new()
             }
             // If there is only just space to fit the required values, return these
             else if empty_cell_count == missing_required_digits.len() {
-                return insert_possibilities(missing_required_digits.clone());
+                insert_possibilities(missing_required_digits.clone())
             }
             // If there is more than enough space, then the cells can be any value
             else {
-                return insert_possibilities((1..=9).collect());
+                insert_possibilities((1..=9).collect())
             }
         } else {
             // Anti-Quadruple
@@ -175,7 +175,7 @@ impl Variant for QuadrupleCircle {
                 return HashMap::new();
             }
             // Return a set of all values not including the required values
-            return insert_possibilities((1..=9).filter(|v| !self.required.contains(v)).collect());
+            insert_possibilities((1..=9).filter(|v| !self.required.contains(v)).collect())
         }
     }
 }
@@ -190,7 +190,7 @@ impl std::fmt::Display for QuadrupleCircle {
         output.push_str(
             self.cells
                 .iter()
-                .map(|&(r, c)| format!("({}, {})", r, c))
+                .map(|&(r, c)| format!("({r}, {c})"))
                 .collect::<Vec<_>>()
                 .join(", ")
                 .as_str(),
@@ -204,7 +204,7 @@ impl std::fmt::Display for QuadrupleCircle {
         let required_str = required_str.trim_end_matches(", ");
         output.push_str(required_str);
         output.push(']');
-        write!(f, "{}", output)
+        write!(f, "{output}")
     }
 }
 

@@ -19,16 +19,16 @@ impl GermanWhisper {
         let splits = data.split(":").collect::<Vec<_>>();
         if splits.len() == 1 {
             let positions = parse_positions(data).ok()?;
-            return Some(SudokuVariant::GermanWhisper(GermanWhisper::new(
+            Some(SudokuVariant::GermanWhisper(GermanWhisper::new(
                 positions, false,
-            )));
+            )))
         } else if splits.len() == 2 && splits[1].to_lowercase().trim() == "circular" {
             let positions = parse_positions(splits[0]).ok()?;
-            return Some(SudokuVariant::GermanWhisper(GermanWhisper::new(
+            Some(SudokuVariant::GermanWhisper(GermanWhisper::new(
                 positions, true,
-            )));
+            )))
         } else {
-            return None;
+            None
         }
     }
 }
@@ -101,127 +101,75 @@ impl Variant for GermanWhisper {
         row: usize,
         col: usize,
     ) -> HashMap<(usize, usize), Vec<u8>> {
-        let Some(start_idx) = self.cells.iter().position(|&(r, c)| (r, c) == (row, col)) else {
-            return HashMap::new(); // Not on the line
-        };
-        let mut possibilities = HashMap::new();
-        let len = self.cells.len();
+        const HIGH_VALUES: &[u8] = &[6, 7, 8, 9];
+        const LOW_VALUES: &[u8] = &[1, 2, 3, 4];
 
-        // Cache current values from the grid
-        let cell_values: Vec<u8> = self
+        let known_idx =
+            if let Some(idx) = self.cells.iter().position(|&(r, c)| (r, c) == (row, col)) {
+                idx
+            } else {
+                return HashMap::new();
+            };
+
+        let cell_values: Vec<_> = self
             .cells
             .iter()
             .map(|&(r, c)| grid.get_cell(r, c))
             .collect();
 
-        // Alternating group propogation (low/high groups)
-        const LOW_VALS: [u8; 4] = [1, 2, 3, 4];
-        const HIGH_VALS: [u8; 4] = [6, 7, 8, 9];
+        let mut possibilities = HashMap::new();
+        let n = self.cells.len();
 
-        let updated_value = cell_values[start_idx];
-        if updated_value == 0 {
-            return HashMap::new(); // Sanity: shouldn't be called before setting value
-        }
+        let known_value = cell_values[known_idx];
+        assert!(
+            known_value != 0,
+            "get_possibilities should only be called after a value is set"
+        );
 
-        // Determine the parity group of the starting value
-        let start_group = if LOW_VALS.contains(&updated_value) {
-            0
+        // Determine whether known value is high or low
+        let is_high = known_value >= 6;
+        // Determine pattern: even indices are high or low
+        let even_is_high = if known_idx % 2 == 0 {
+            is_high
         } else {
-            1
+            !is_high
         };
 
-        // Forward propogation
-        if start_idx < len - 1 {
-            for i in start_idx + 1..len {
-                let expected_group = (i - start_idx + start_group) % 2;
-                let coord = self.cells[i];
-                match cell_values[i] {
-                    0 => {
-                        let options = if expected_group == 0 {
-                            LOW_VALS.to_vec()
-                        } else {
-                            HIGH_VALS.to_vec()
-                        };
-                        possibilities.entry(coord).or_insert(options);
-                    }
-                    val => {
-                        let valid_group = if expected_group == 0 {
-                            &LOW_VALS
-                        } else {
-                            &HIGH_VALS
-                        };
-                        if !valid_group.contains(&val) || val.abs_diff(cell_values[i - 1]) < 5 {
-                            if cell_values[i] == 0 {
-                                possibilities.insert(coord, vec![]); // Conflict
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Backward propogation
-        if start_idx > 0 {
-            for i in (0..start_idx).rev() {
-                let expected_group = (start_idx - i + start_group) % 2;
-                let coord = self.cells[i];
-                match cell_values[i] {
-                    0 => {
-                        let options = if expected_group == 0 {
-                            LOW_VALS.to_vec()
-                        } else {
-                            HIGH_VALS.to_vec()
-                        };
-                        possibilities.entry(coord).or_insert(options);
-                    }
-                    val => {
-                        let valid_group = if expected_group == 0 {
-                            &LOW_VALS
-                        } else {
-                            &HIGH_VALS
-                        };
-                        if !valid_group.contains(&val) || val.abs_diff(cell_values[i + 1]) < 5 {
-                            if cell_values[i] != 0 {
-                                possibilities.insert(coord, vec![]); // Conflict
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Filter with actual adjacent neighbours (including circular)
         for (i, &(r, c)) in self.cells.iter().enumerate() {
-            if cell_values[i] != 0 {
-                continue; // Skip already filled cells
+            if cell_values[i] != 0 || (r, c) == (row, col) {
+                continue;
             }
-            let mut neighbours = vec![];
 
-            if i > 0 && cell_values[i - 1] != 0 {
-                neighbours.push(cell_values[i - 1]);
-            }
-            if i + 1 < len && cell_values[i + 1] != 0 {
-                neighbours.push(cell_values[i + 1]);
-            }
-            // Circular checks
-            if self.is_circular {
-                if i == 0 && cell_values[len - 1] != 0 {
-                    neighbours.push(cell_values[len - 1]);
-                } else if i == len - 1 && cell_values[0] != 0 {
-                    neighbours.push(cell_values[0]);
-                }
-            }
-            if !neighbours.is_empty() {
-                let entry = possibilities
-                    .entry((r, c))
-                    .or_insert_with(|| (1..=9).collect());
-                entry.retain(|&v| neighbours.iter().all(|&n| v.abs_diff(n) >= 5));
+            let group = if (i % 2 == 0) == even_is_high {
+                HIGH_VALUES
+            } else {
+                LOW_VALUES
+            };
 
-                if entry.is_empty() {
-                    // We still want this cell in the map with an empty vec
-                    possibilities.insert((r, c), vec![]);
+            // Prune group based on actual neighbours
+            let mut valid_values = vec![];
+
+            'outer: for &v in group {
+                for &offset in &[-1, 1] {
+                    let neighbour_idx = if self.is_circular {
+                        ((i as isize + offset + n as isize) % n as isize) as usize
+                    } else {
+                        let ni = i as isize + offset;
+                        if ni < 0 || ni >= n as isize {
+                            continue;
+                        }
+                        ni as usize
+                    };
+
+                    let neighbour_val = cell_values[neighbour_idx];
+
+                    if neighbour_val != 0 && (v as i8 - neighbour_val as i8).abs() < 5 {
+                        continue 'outer;
+                    }
                 }
+                valid_values.push(v);
             }
+            possibilities.insert((r, c), valid_values);
         }
 
         possibilities
@@ -438,19 +386,63 @@ mod tests {
             grid.set_cell(2, 2, 7); // Already filled
 
             let result = whisper.get_possibilities(&grid, 2, 1);
-            println!("Result: {result:?}");
             assert!(result.contains_key(&(2, 0)));
             assert!(!result.contains_key(&(2, 2)));
         }
 
         #[test]
-        fn test_backpropogation_from_late_value() {
+        fn test_conflicting_known_values() {
             let mut grid = SudokuGrid::empty();
-            grid.set_cell(0, 2, 1);
+            grid.set_cell(0, 0, 1); // Low
+            grid.set_cell(0, 2, 9); // High - conflict with (0, 0)
             let whisper = GermanWhisper::new(vec![(0, 0), (0, 1), (0, 2)], false);
-            let result = whisper.get_possibilities(&grid, 0, 2);
-            assert_eq!(result.get(&(0, 1)).unwrap(), &vec![6, 7, 8, 9]);
-            assert_eq!(result.get(&(0, 0)).unwrap(), &vec![1, 2, 3, 4]);
+            let result = whisper.get_possibilities(&grid, 0, 0);
+            assert_eq!(result.get(&(0, 1)), Some(&vec![]));
+        }
+
+        #[test]
+        fn test_parity_inference_from_odd_index() {
+            let mut grid = SudokuGrid::empty();
+            grid.set_cell(0, 1, 8); // high at an odd index
+            let whisper = GermanWhisper::new(vec![(0, 0), (0, 1), (0, 2)], false);
+            let result = whisper.get_possibilities(&grid, 0, 1);
+            let expected = vec![1, 2, 3];
+            assert_eq!(result.len(), 2);
+            assert_eq!(result.get(&(0, 0)).unwrap(), &expected);
+            assert_eq!(result.get(&(0, 2)).unwrap(), &expected);
+        }
+
+        #[test]
+        fn test_five_never_included() {
+            let mut grid = SudokuGrid::empty();
+            grid.set_cell(0, 1, 1); // Low
+            let whisper = GermanWhisper::new(vec![(0, 0), (0, 1)], false);
+            let result = whisper.get_possibilities(&grid, 0, 1);
+            let values = result.get(&(0, 0)).unwrap();
+            assert!(!values.contains(&5));
+        }
+
+        #[test]
+        fn test_long_whisper_line() {
+            let mut grid = SudokuGrid::empty();
+            grid.set_cell(0, 0, 7);
+            let whisper =
+                GermanWhisper::new(vec![(0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (0, 5)], true);
+            let result = whisper.get_possibilities(&grid, 0, 0);
+            assert_eq!(result.get(&(0, 1)).unwrap(), &vec![1, 2]);
+            assert_eq!(result.get(&(0, 2)).unwrap(), &vec![6, 7, 8, 9]);
+            assert_eq!(result.get(&(0, 3)).unwrap(), &vec![1, 2, 3, 4]);
+            assert_eq!(result.get(&(0, 4)).unwrap(), &vec![6, 7, 8, 9]);
+            assert_eq!(result.get(&(0, 5)).unwrap(), &vec![1, 2]);
+
+            let whisper =
+                GermanWhisper::new(vec![(0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (0, 5)], false);
+            let result = whisper.get_possibilities(&grid, 0, 0);
+            assert_eq!(result.get(&(0, 1)).unwrap(), &vec![1, 2]);
+            assert_eq!(result.get(&(0, 2)).unwrap(), &vec![6, 7, 8, 9]);
+            assert_eq!(result.get(&(0, 3)).unwrap(), &vec![1, 2, 3, 4]);
+            assert_eq!(result.get(&(0, 4)).unwrap(), &vec![6, 7, 8, 9]);
+            assert_eq!(result.get(&(0, 5)).unwrap(), &vec![1, 2, 3, 4]);
         }
     }
 }

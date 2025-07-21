@@ -44,7 +44,7 @@ pub fn parse_file(path: &Path) -> Result<SudokuGrid, Error> {
         } else if !line.is_empty() {
             return Err(Error::new(
                 ErrorKind::InvalidData,
-                format!("Invalid variant line: {}", line),
+                format!("Invalid variant line: {line}"),
             ));
         }
     }
