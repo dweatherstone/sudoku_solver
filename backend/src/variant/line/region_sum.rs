@@ -9,7 +9,14 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::{SudokuVariant, file_parser::parse_positions, variant::Variant};
+use crate::{
+    SudokuGrid, SudokuVariant,
+    file_parser::parse_positions,
+    variant::{
+        Variant,
+        error::{PossibilityResult, VariantContradiction},
+    },
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RegionSum {
@@ -176,21 +183,11 @@ impl Variant for RegionSum {
             .collect()
     }
 
-    fn get_possibilities(
-        &self,
-        grid: &crate::SudokuGrid,
-        row: usize,
-        col: usize,
-    ) -> HashMap<(usize, usize), Vec<u8>> {
-        // 1. If the cell isn't on the region sum, return empty
-        if !self.constrained_cells().contains(&(row, col)) {
-            return HashMap::new();
-        }
-
+    fn get_possibilities(&self, grid: &SudokuGrid) -> PossibilityResult {
         let mut possibilities = HashMap::new();
         let mut target_sum: Option<u8> = None;
 
-        // 2: Try to find a target sum for any box with fully known values
+        // 1: Try to find a target sum for any box with fully known values
         for cells in self.box_cells.values() {
             let known_vals: Vec<u8> = cells
                 .iter()
@@ -199,13 +196,12 @@ impl Variant for RegionSum {
                 .collect();
 
             if known_vals.len() == cells.len() {
-                let sum = known_vals.iter().sum();
-                target_sum = Some(sum);
+                target_sum = Some(known_vals.iter().sum());
                 break;
             }
         }
 
-        // 3: Try to infer a possible target sum if none is known
+        // 2: Try to infer a possible target sum if none is known
         let mut candidate_sums: HashSet<u8> = HashSet::new();
         if target_sum.is_none() {
             let mut sets_per_box = Vec::new();
@@ -225,26 +221,34 @@ impl Variant for RegionSum {
                 let min_possible_sum = known_sum + unknown_count as u8; // All 1s
                 let max_possible_sum = known_sum + (9 * unknown_count) as u8; // All 9s
 
-                let this_box_sums: HashSet<u8> = (min_possible_sum..=max_possible_sum).collect();
-                sets_per_box.push(this_box_sums);
+                sets_per_box.push((min_possible_sum..=max_possible_sum).collect::<HashSet<_>>());
             }
 
             // Intersect candidate sets across all boxes
             if !sets_per_box.is_empty() {
                 let mut iter = sets_per_box.into_iter();
                 let first = iter.next().unwrap();
-                let intersection =
+                candidate_sums =
                     iter.fold(first, |acc, set| acc.intersection(&set).copied().collect());
-                candidate_sums = intersection;
             }
 
             // No valid common target
             if candidate_sums.is_empty() {
-                return HashMap::new();
+                for cells in self.box_cells.values() {
+                    for &(r, c) in cells {
+                        let val = grid.get_cell(r, c);
+                        if val != 0 {
+                            possibilities.insert((r, c), vec![val]);
+                        } else {
+                            possibilities.insert((r, c), vec![]);
+                        }
+                    }
+                }
+                return Ok(possibilities);
             }
         }
 
-        // 4: For each box, determine possible values for unknowns
+        // 3: For each box, determine possible values for unknowns
         for cells in self.box_cells.values() {
             let known_vals: Vec<u8> = cells
                 .iter()
@@ -258,12 +262,18 @@ impl Variant for RegionSum {
                 .copied()
                 .filter(|&(r, c)| grid.get_cell(r, c) == 0)
                 .collect();
-            if unknown_cells.is_empty() {
-                continue;
-            }
 
             let remaining_cells = unknown_cells.len();
 
+            // For already filled cells - just that value
+            for &(r, c) in cells {
+                let val = grid.get_cell(r, c);
+                if val != 0 {
+                    possibilities.insert((r, c), vec![val]);
+                }
+            }
+
+            // For unknown cells - compute possibilities
             for &(r, c) in &unknown_cells {
                 let mut range = HashSet::new();
                 let possible_sums = if let Some(ts) = target_sum {
@@ -286,15 +296,20 @@ impl Variant for RegionSum {
                     }
                 }
 
-                if !range.is_empty() {
-                    let mut vec_range: Vec<u8> = range.into_iter().collect();
-                    vec_range.sort_unstable();
-                    possibilities.insert((r, c), vec_range);
+                if range.is_empty() {
+                    return Err(VariantContradiction::NoPossibilities {
+                        cell: (r, c),
+                        variant: "RegionSum",
+                        reason: String::from("No possible range"),
+                    });
                 }
+                let mut vec_range: Vec<u8> = range.into_iter().collect();
+                vec_range.sort_unstable();
+                possibilities.insert((r, c), vec_range);
             }
         }
 
-        possibilities
+        Ok(possibilities)
     }
 }
 
@@ -322,7 +337,10 @@ impl Display for RegionSum {
 
 #[cfg(test)]
 mod tests {
-    use crate::{SudokuGrid, variant::Variant};
+    use crate::{
+        SudokuGrid,
+        variant::{Variant, VariantContradiction},
+    };
 
     use super::RegionSum;
 
@@ -333,8 +351,12 @@ mod tests {
         grid.set_cell(1, 0, 2);
         grid.set_cell(2, 0, 3);
         let region_sum = RegionSum::new(vec![(1, 0), (2, 0), (0, 3), (1, 3)]);
-        let result = region_sum.get_possibilities(&grid, 2, 0);
-        assert_eq!(result.len(), 2);
+        let result = region_sum.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 4);
+        assert_eq!(result.get(&(1, 0)), Some(&vec![2]));
+        assert_eq!(result.get(&(2, 0)), Some(&vec![3]));
         assert_eq!(result.get(&(0, 3)).unwrap(), &vec![1, 2, 3, 4]);
         assert_eq!(result.get(&(1, 3)).unwrap(), &vec![1, 2, 3, 4]);
     }
@@ -346,8 +368,12 @@ mod tests {
         grid.set_cell(1, 0, 1);
         grid.set_cell(0, 3, 9);
         let rs = RegionSum::new(vec![(1, 0), (2, 0), (0, 3), (1, 3)]);
-        let result = rs.get_possibilities(&grid, 0, 3);
-        assert_eq!(result.len(), 2);
+        let result = rs.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 4);
+        assert_eq!(result.get(&(1, 0)), Some(&vec![1]));
+        assert_eq!(result.get(&(2, 0)), Some(&vec![9]));
         assert_eq!(result.get(&(2, 0)).unwrap(), &vec![9]);
         assert_eq!(result.get(&(1, 3)).unwrap(), &vec![1]);
     }
@@ -359,8 +385,12 @@ mod tests {
         grid.set_cell(1, 0, 4);
         grid.set_cell(0, 3, 5);
         let rs = RegionSum::new(vec![(1, 0), (2, 0), (0, 3), (1, 3)]);
-        let result = rs.get_possibilities(&grid, 0, 3);
-        assert_eq!(result.len(), 2);
+        let result = rs.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 4);
+        assert_eq!(result.get(&(1, 0)), Some(&vec![4]));
+        assert_eq!(result.get(&(0, 3)), Some(&vec![5]));
         assert_eq!(result.get(&(2, 0)).unwrap(), &vec![2, 3, 4, 5, 6, 7, 8, 9]);
         assert_eq!(result.get(&(1, 3)).unwrap(), &vec![1, 2, 3, 4, 5, 6, 7, 8]);
     }
@@ -369,39 +399,35 @@ mod tests {
     fn test_get_possibilities_fully_known() {
         let mut grid = SudokuGrid::empty();
         grid.set_cell(1, 0, 2);
-        grid.set_cell(2, 0, 3);
+        grid.set_cell(2, 0, 5);
         grid.set_cell(0, 3, 4);
-        grid.set_cell(1, 3, 5);
+        grid.set_cell(1, 3, 3);
 
         let rs = RegionSum::new(vec![(1, 0), (2, 0), (0, 3), (1, 3)]);
-        let result = rs.get_possibilities(&grid, 0, 3);
-        assert!(result.is_empty());
+        let result = rs.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 4);
+        assert_eq!(result.get(&(1, 0)), Some(&vec![2]));
+        assert_eq!(result.get(&(2, 0)), Some(&vec![5]));
+        assert_eq!(result.get(&(0, 3)), Some(&vec![4]));
+        assert_eq!(result.get(&(1, 3)), Some(&vec![3]));
     }
 
     #[test]
     fn test_get_possibilities_inconsistent_sum() {
         let mut grid = SudokuGrid::empty();
-        grid.set_cell(1, 0, 1);
-        grid.set_cell(2, 0, 2); // Box 1 partial sum = 3
+        grid.set_cell(1, 0, 1); // Box 1 - partial sum is only 1 so far
         grid.set_cell(0, 3, 9);
-        grid.set_cell(1, 3, 9); // Box 2 partial sum = 18
+        grid.set_cell(1, 3, 8); // Box 2 partial sum = 17
 
         let rs = RegionSum::new(vec![(1, 0), (2, 0), (0, 3), (1, 3)]);
-        let result = rs.get_possibilities(&grid, 1, 0);
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn test_get_possibilities_multiple_known_sums() {
-        let mut grid = SudokuGrid::empty();
-        grid.set_cell(1, 0, 3);
-        grid.set_cell(2, 0, 4); // sum = 7
-        grid.set_cell(0, 3, 2);
-        grid.set_cell(1, 3, 5); // sum = 7
-
-        let rs = RegionSum::new(vec![(1, 0), (2, 0), (0, 3), (1, 3)]);
-        let result = rs.get_possibilities(&grid, 1, 0);
-        assert!(result.is_empty()); // All known, so no unknowns
+        let result = rs.get_possibilities(&grid);
+        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(VariantContradiction::NoPossibilities { cell: (2, 0), .. })
+        ));
     }
 
     #[test]
@@ -413,9 +439,12 @@ mod tests {
         grid.set_cell(1, 3, 0); // sum = ?? (unknowns)
 
         let rs = RegionSum::new(vec![(1, 0), (2, 0), (0, 3), (1, 3)]);
-        let result = rs.get_possibilities(&grid, 1, 3);
-
-        assert_eq!(result.len(), 2);
+        let result = rs.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 4);
+        assert_eq!(result.get(&(1, 0)), Some(&vec![3]));
+        assert_eq!(result.get(&(2, 0)), Some(&vec![4]));
         assert_eq!(result.get(&(0, 3)).unwrap(), &vec![1, 2, 3, 4, 5, 6]);
         assert_eq!(result.get(&(1, 3)).unwrap(), &vec![1, 2, 3, 4, 5, 6]);
     }
@@ -425,7 +454,9 @@ mod tests {
         let grid = SudokuGrid::empty();
         let rs = RegionSum::new(vec![(0, 0)]);
 
-        let result = rs.get_possibilities(&grid, 0, 0);
+        let result = rs.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(
             result.get(&(0, 0)).unwrap(),
@@ -439,8 +470,13 @@ mod tests {
         grid.set_cell(1, 0, 3);
 
         let rs = RegionSum::new(vec![(0, 0), (0, 1)]);
-        let result = rs.get_possibilities(&grid, 1, 0);
-        assert!(result.is_empty());
+        let result = rs.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 2);
+        let expected = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
+        assert_eq!(result.get(&(0, 0)), Some(&expected));
+        assert_eq!(result.get(&(0, 1)), Some(&expected));
     }
 
     #[test]

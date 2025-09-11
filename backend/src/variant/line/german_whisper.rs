@@ -2,7 +2,14 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{SudokuVariant, file_parser::parse_positions, variant::Variant};
+use crate::{
+    SudokuGrid, SudokuVariant,
+    file_parser::parse_positions,
+    variant::{
+        ALL_POSSIBILITIES, Variant,
+        error::{PossibilityResult, VariantContradiction},
+    },
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GermanWhisper {
@@ -95,21 +102,19 @@ impl Variant for GermanWhisper {
         true
     }
 
-    fn get_possibilities(
-        &self,
-        grid: &crate::SudokuGrid,
-        row: usize,
-        col: usize,
-    ) -> HashMap<(usize, usize), Vec<u8>> {
+    fn get_possibilities(&self, grid: &SudokuGrid) -> PossibilityResult {
         const HIGH_VALUES: &[u8] = &[6, 7, 8, 9];
         const LOW_VALUES: &[u8] = &[1, 2, 3, 4];
 
-        let known_idx =
-            if let Some(idx) = self.cells.iter().position(|&(r, c)| (r, c) == (row, col)) {
-                idx
-            } else {
-                return HashMap::new();
-            };
+        let known_idx = self
+            .cells
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, &(r, c))| {
+                let val = grid.get_cell(r, c);
+                (val != 0).then_some(idx)
+            })
+            .nth(0);
 
         let cell_values: Vec<_> = self
             .cells
@@ -120,11 +125,29 @@ impl Variant for GermanWhisper {
         let mut possibilities = HashMap::new();
         let n = self.cells.len();
 
+        if known_idx.is_none() {
+            let all_except_5: Vec<u8> = ALL_POSSIBILITIES
+                .iter()
+                .filter(|&v| *v != 5)
+                .cloned()
+                .collect();
+            for &(r, c) in &self.cells {
+                possibilities.insert((r, c), all_except_5.clone());
+            }
+            return Ok(possibilities);
+        }
+
+        // Can use `unwrap` because we have just returned if known_idx is None.
+        let known_idx = known_idx.unwrap();
         let known_value = cell_values[known_idx];
-        assert!(
-            known_value != 0,
-            "get_possibilities should only be called after a value is set"
-        );
+        if known_value == 0 {
+            return Err(VariantContradiction::Inconsistent {
+                variant: "GermanWhisper",
+                reason: String::from(
+                    "get_possibilities should only be called after a value is set",
+                ),
+            });
+        }
 
         // Determine whether known value is high or low
         let is_high = known_value >= 6;
@@ -136,7 +159,11 @@ impl Variant for GermanWhisper {
         };
 
         for (i, &(r, c)) in self.cells.iter().enumerate() {
-            if cell_values[i] != 0 || (r, c) == (row, col) {
+            if cell_values[i] == 5 {
+                possibilities.insert((r, c), vec![]);
+                continue;
+            } else if cell_values[i] != 0 {
+                possibilities.insert((r, c), vec![cell_values[i]]);
                 continue;
             }
 
@@ -172,7 +199,7 @@ impl Variant for GermanWhisper {
             possibilities.insert((r, c), valid_values);
         }
 
-        possibilities
+        Ok(possibilities)
     }
 }
 
@@ -315,8 +342,12 @@ mod tests {
             let mut grid = SudokuGrid::empty();
             grid.set_cell(0, 0, 5);
             let line = GermanWhisper::new(vec![(0, 1), (0, 2)], false);
-            let result = line.get_possibilities(&grid, 0, 0);
-            assert!(result.is_empty());
+            let result = line.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.len(), 2);
+            assert_eq!(result.get(&(0, 1)), Some(&vec![1, 2, 3, 4, 6, 7, 8, 9]));
+            assert_eq!(result.get(&(0, 2)), Some(&vec![1, 2, 3, 4, 6, 7, 8, 9]));
         }
 
         #[test]
@@ -325,9 +356,12 @@ mod tests {
             grid.set_cell(0, 0, 3);
             let whisper = GermanWhisper::new(vec![(0, 0), (0, 1)], false);
 
-            let result = whisper.get_possibilities(&grid, 0, 0);
-            assert_eq!(result.len(), 1);
+            let result = whisper.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.len(), 2);
             assert_eq!(result.get(&(0, 1)).unwrap(), &vec![8, 9]);
+            assert_eq!(result.get(&(0, 0)).unwrap(), &vec![3]);
         }
 
         #[test]
@@ -336,8 +370,11 @@ mod tests {
             grid.set_cell(0, 1, 7);
             let whisper = GermanWhisper::new(vec![(0, 0), (0, 1), (0, 2)], false);
 
-            let result = whisper.get_possibilities(&grid, 0, 1);
-            assert_eq!(result.len(), 2);
+            let result = whisper.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.len(), 3);
+            assert_eq!(result.get(&(0, 1)).unwrap(), &vec![7]);
             let expected = vec![1, 2];
             assert_eq!(result.get(&(0, 0)).unwrap(), &expected);
             assert_eq!(result.get(&(0, 2)).unwrap(), &expected);
@@ -348,19 +385,37 @@ mod tests {
             let mut grid = SudokuGrid::empty();
             grid.set_cell(0, 0, 6);
             let whisper = GermanWhisper::new(vec![(0, 0), (0, 1), (0, 2), (0, 3)], true);
-            let result = whisper.get_possibilities(&grid, 0, 0);
-            assert_eq!(result.len(), 3);
+            let result = whisper.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.len(), 4);
+            assert_eq!(result.get(&(0, 0)).unwrap(), &vec![6]);
             assert_eq!(result.get(&(0, 1)).unwrap(), &vec![1]);
             assert_eq!(result.get(&(0, 3)).unwrap(), &vec![1]);
             assert_eq!(result.get(&(0, 2)).unwrap(), &vec![6, 7, 8, 9]);
         }
 
         #[test]
-        fn test_single_cell_line() {
+        fn test_single_cell_line_success() {
+            let mut grid = SudokuGrid::empty();
+            grid.set_cell(4, 4, 7);
+            let whisper = GermanWhisper::new(vec![(4, 4)], false);
+            let result = whisper.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.get(&(4, 4)), Some(&vec![7]));
+        }
+
+        #[test]
+        fn test_single_cell_line_fail() {
             let mut grid = SudokuGrid::empty();
             grid.set_cell(4, 4, 5);
             let whisper = GermanWhisper::new(vec![(4, 4)], false);
-            assert!(whisper.get_possibilities(&grid, 4, 4).is_empty());
+            let result = whisper.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.len(), 1);
+            assert_eq!(result.get(&(4, 4)), Some(&vec![]));
         }
 
         #[test]
@@ -368,8 +423,11 @@ mod tests {
             let mut grid = SudokuGrid::empty();
             grid.set_cell(0, 0, 5);
             let whisper = GermanWhisper::new(vec![(0, 0), (0, 1)], false);
-            let result = whisper.get_possibilities(&grid, 0, 0);
-            assert_eq!(result.len(), 1);
+            let result = whisper.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.len(), 2);
+            assert_eq!(result.get(&(0, 0)), Some(&vec![]));
             assert_eq!(result.get(&(0, 1)), Some(&vec![]));
         }
 
@@ -381,13 +439,16 @@ mod tests {
                 is_circular: false,
             };
 
-            grid.set_cell(2, 1, 6); // Set center
-            grid.set_cell(2, 0, 0); // Unset
+            grid.set_cell(2, 0, 6); // Set center
+            grid.set_cell(2, 1, 0); // Unset
             grid.set_cell(2, 2, 7); // Already filled
 
-            let result = whisper.get_possibilities(&grid, 2, 1);
+            let result = whisper.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
             assert!(result.contains_key(&(2, 0)));
-            assert!(!result.contains_key(&(2, 2)));
+            assert_eq!(result.get(&(2, 1)), Some(&vec![1]));
+            assert!(result.contains_key(&(2, 2)));
         }
 
         #[test]
@@ -396,7 +457,9 @@ mod tests {
             grid.set_cell(0, 0, 1); // Low
             grid.set_cell(0, 2, 9); // High - conflict with (0, 0)
             let whisper = GermanWhisper::new(vec![(0, 0), (0, 1), (0, 2)], false);
-            let result = whisper.get_possibilities(&grid, 0, 0);
+            let result = whisper.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
             assert_eq!(result.get(&(0, 1)), Some(&vec![]));
         }
 
@@ -405,11 +468,14 @@ mod tests {
             let mut grid = SudokuGrid::empty();
             grid.set_cell(0, 1, 8); // high at an odd index
             let whisper = GermanWhisper::new(vec![(0, 0), (0, 1), (0, 2)], false);
-            let result = whisper.get_possibilities(&grid, 0, 1);
+            let result = whisper.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
             let expected = vec![1, 2, 3];
-            assert_eq!(result.len(), 2);
+            assert_eq!(result.len(), 3);
             assert_eq!(result.get(&(0, 0)).unwrap(), &expected);
             assert_eq!(result.get(&(0, 2)).unwrap(), &expected);
+            assert_eq!(result.get(&(0, 1)).unwrap(), &vec![8]);
         }
 
         #[test]
@@ -417,7 +483,9 @@ mod tests {
             let mut grid = SudokuGrid::empty();
             grid.set_cell(0, 1, 1); // Low
             let whisper = GermanWhisper::new(vec![(0, 0), (0, 1)], false);
-            let result = whisper.get_possibilities(&grid, 0, 1);
+            let result = whisper.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
             let values = result.get(&(0, 0)).unwrap();
             assert!(!values.contains(&5));
         }
@@ -428,21 +496,27 @@ mod tests {
             grid.set_cell(0, 0, 7);
             let whisper =
                 GermanWhisper::new(vec![(0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (0, 5)], true);
-            let result = whisper.get_possibilities(&grid, 0, 0);
+            let result = whisper.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
             assert_eq!(result.get(&(0, 1)).unwrap(), &vec![1, 2]);
             assert_eq!(result.get(&(0, 2)).unwrap(), &vec![6, 7, 8, 9]);
             assert_eq!(result.get(&(0, 3)).unwrap(), &vec![1, 2, 3, 4]);
             assert_eq!(result.get(&(0, 4)).unwrap(), &vec![6, 7, 8, 9]);
             assert_eq!(result.get(&(0, 5)).unwrap(), &vec![1, 2]);
+            assert_eq!(result.get(&(0, 0)).unwrap(), &vec![7]);
 
             let whisper =
                 GermanWhisper::new(vec![(0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (0, 5)], false);
-            let result = whisper.get_possibilities(&grid, 0, 0);
+            let result = whisper.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
             assert_eq!(result.get(&(0, 1)).unwrap(), &vec![1, 2]);
             assert_eq!(result.get(&(0, 2)).unwrap(), &vec![6, 7, 8, 9]);
             assert_eq!(result.get(&(0, 3)).unwrap(), &vec![1, 2, 3, 4]);
             assert_eq!(result.get(&(0, 4)).unwrap(), &vec![6, 7, 8, 9]);
             assert_eq!(result.get(&(0, 5)).unwrap(), &vec![1, 2, 3, 4]);
+            assert_eq!(result.get(&(0, 0)).unwrap(), &vec![7]);
         }
     }
 }

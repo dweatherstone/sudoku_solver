@@ -8,9 +8,12 @@ use axum::{
     routing::{get, post},
     serve,
 };
-use std::io::{Error, ErrorKind};
 use std::sync::Arc;
 use std::{env, path::PathBuf};
+use std::{
+    io::{Error, ErrorKind},
+    time::Instant,
+};
 use sudoku_solver::{
     Diagonal, KillerCage, KropkiDot, QuadrupleCircle, Solver, SudokuGrid, SudokuVariant,
     Thermometer, get_examples_path,
@@ -35,7 +38,7 @@ async fn solve_handler(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
 ) -> Result<Json<SudokuGrid>, StatusCode> {
     let mut grid = state.grid.write().await;
-    let mut solver = Solver::new(&mut grid);
+    let mut solver = Solver::new(&mut grid).map_err(|_| StatusCode::UNPROCESSABLE_ENTITY)?;
 
     if solver.solve(false) {
         Ok(Json(grid.clone()))
@@ -90,7 +93,7 @@ fn main() -> Result<(), Error> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() != 2 {
-        //killer_example();
+        // killer_example();
         //building_blocks(true);
         //quadruple_circles_example(true);
         // kropki_example(true);
@@ -411,14 +414,17 @@ fn ultraviolet(do_solve: bool) {
 }
 
 fn triumvirate(do_solve: bool) {
-    let filename = "anti_quad5.txt";
+    let filename = "peppermint.txt";
     let mut path = PathBuf::from(get_examples_path());
     path.push(filename);
 
     let mut grid = SudokuGrid::read_from_file(&path).unwrap();
 
     if do_solve {
-        run_solve(&mut grid, true, true);
+        let start = Instant::now();
+        run_solve(&mut grid, true, false);
+        let duration = start.elapsed();
+        println!("Time elapsed: {:?}", duration);
     } else {
         grid.display(true);
     }
@@ -428,7 +434,14 @@ fn run_solve(grid: &mut SudokuGrid, show_variants: bool, debug: bool) {
     println!("Sudoku Puzzle::::");
     grid.display(show_variants);
 
-    let mut solver = Solver::new(grid);
+    let mut solver = match Solver::new(grid) {
+        Ok(s) => s,
+        Err(e) => {
+            println!("Early contradiction: {}", e);
+            println!("\nNo solution found for this Sudoku puzzle");
+            return;
+        }
+    };
     if solver.solve(debug) {
         println!("\n<<<<<<<<<<<<<<<<<Solved Sudoku Puzzle>>>>>>>>>>>>>>>>>>>>");
         grid.display(false);

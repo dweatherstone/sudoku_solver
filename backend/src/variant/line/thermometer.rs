@@ -1,8 +1,15 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{SudokuVariant, file_parser::parse_positions, variant::Variant};
+use crate::{
+    SudokuGrid, SudokuVariant,
+    file_parser::parse_positions,
+    variant::{
+        Variant,
+        error::{PossibilityResult, VariantContradiction},
+    },
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Thermometer {
@@ -75,32 +82,21 @@ impl Variant for Thermometer {
         self.cells.clone()
     }
 
-    fn get_possibilities(
-        &self,
-        grid: &crate::SudokuGrid,
-        row: usize,
-        col: usize,
-    ) -> HashMap<(usize, usize), Vec<u8>> {
-        // 1. If the cell isn't on the thermometer, return empty
-        if !self.cells.contains(&(row, col)) {
-            return HashMap::new();
+    fn get_possibilities(&self, grid: &SudokuGrid) -> PossibilityResult {
+        // Gather known values with their positions (index on the thermometer)
+        let mut known_cells = BTreeMap::new();
+        for (i, &(r, c)) in self.cells.iter().enumerate() {
+            let val = grid.get_cell(r, c);
+            if val != 0 {
+                known_cells.insert(i, val);
+            }
         }
-
-        // 2. Gather known values with their positions (index on the thermometer)
-        let known_cells: HashMap<usize, u8> = self
-            .cells
-            .iter()
-            .enumerate()
-            .filter_map(|(i, &(r, c))| {
-                let val = grid.get_cell(r, c);
-                if val == 0 { None } else { Some((i, val)) }
-            })
-            .collect();
 
         let mut possibilities = HashMap::new();
 
         for (i, &(r, c)) in self.cells.iter().enumerate() {
-            if known_cells.contains_key(&i) {
+            if let Some(&val) = known_cells.get(&i) {
+                possibilities.insert((r, c), vec![val]);
                 continue; // already known, skip
             }
 
@@ -109,27 +105,30 @@ impl Variant for Thermometer {
 
             // Min = 1 + max known value before
             let min_val = known_cells
-                .iter()
-                .filter(|&(&idx, _)| idx < i)
+                .range(..i) // all before i
+                .next_back()
                 .map(|(&idx, &val)| val + (i - idx) as u8)
-                .max()
                 .unwrap_or(1 + i as u8);
 
             // Find tightest max based on any known value after
             let max_val = known_cells
-                .iter()
-                .filter(|&(&idx, _)| idx > i)
+                .range(i + 1..) // all after i
+                .next()
                 .map(|(&idx, &val)| val - (idx - i) as u8)
-                .min()
                 .unwrap_or(9 - (self.length - i - 1) as u8);
 
-            if min_val <= max_val {
-                possibilities.insert((r, c), (min_val..=max_val).collect());
+            let vals = if min_val <= max_val {
+                (min_val..=max_val).collect()
             } else {
-                possibilities.insert((r, c), vec![]);
-            }
+                return Err(VariantContradiction::NoPossibilities {
+                    cell: (r, c),
+                    variant: "Thermometer",
+                    reason: String::from("No possible value on thermometer"),
+                });
+            };
+            possibilities.insert((r, c), vals);
         }
-        possibilities
+        Ok(possibilities)
     }
 }
 
@@ -155,9 +154,12 @@ mod tests {
         let mut grid = SudokuGrid::empty();
         let thermometer = create_thermometer();
         grid.set_cell(0, 2, 5);
-        let result = thermometer.get_possibilities(&grid, 0, 2);
-        assert_eq!(result.len(), 3);
+        let result = thermometer.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 4);
         assert_eq!(result.get(&(0, 1)).unwrap(), &vec![1, 2, 3, 4]);
+        assert_eq!(result.get(&(0, 2)).unwrap(), &vec![5]);
         assert_eq!(result.get(&(0, 3)).unwrap(), &vec![6, 7, 8]);
         assert_eq!(result.get(&(0, 4)).unwrap(), &vec![7, 8, 9]);
     }
@@ -167,8 +169,11 @@ mod tests {
         let mut grid = SudokuGrid::empty();
         let thermometer = create_thermometer();
         grid.set_cell(0, 1, 3); // Set first cell
-        let result = thermometer.get_possibilities(&grid, 0, 1);
-        assert_eq!(result.len(), 3);
+        let result = thermometer.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 4);
+        assert_eq!(result.get(&(0, 1)).unwrap(), &vec![3]);
         assert_eq!(result.get(&(0, 2)).unwrap(), &vec![4, 5, 6, 7]);
         assert_eq!(result.get(&(0, 3)).unwrap(), &vec![5, 6, 7, 8]);
         assert_eq!(result.get(&(0, 4)).unwrap(), &vec![6, 7, 8, 9]);
@@ -179,11 +184,14 @@ mod tests {
         let mut grid = SudokuGrid::empty();
         let thermometer = create_thermometer();
         grid.set_cell(0, 4, 6); // Set first cell
-        let result = thermometer.get_possibilities(&grid, 0, 1);
-        assert_eq!(result.len(), 3);
+        let result = thermometer.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 4);
         assert_eq!(result.get(&(0, 1)).unwrap(), &vec![1, 2, 3]);
         assert_eq!(result.get(&(0, 2)).unwrap(), &vec![2, 3, 4]);
         assert_eq!(result.get(&(0, 3)).unwrap(), &vec![3, 4, 5]);
+        assert_eq!(result.get(&(0, 4)).unwrap(), &vec![6]);
     }
 
     #[test]
@@ -192,19 +200,37 @@ mod tests {
         let thermometer = create_thermometer();
         grid.set_cell(0, 1, 3);
         grid.set_cell(0, 4, 7);
-        let result = thermometer.get_possibilities(&grid, 0, 1);
-        assert_eq!(result.len(), 2);
+        let result = thermometer.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 4);
+        assert_eq!(result.get(&(0, 1)).unwrap(), &vec![3]);
         assert_eq!(result.get(&(0, 2)).unwrap(), &vec![4, 5]);
         assert_eq!(result.get(&(0, 3)).unwrap(), &vec![5, 6]);
+        assert_eq!(result.get(&(0, 4)).unwrap(), &vec![7]);
     }
 
     #[test]
-    fn test_get_possibilities_not_present() {
+    fn test_get_possibilities_empty() {
+        let grid = SudokuGrid::empty();
+        let thermometer = create_thermometer();
+        let result = thermometer.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 4);
+        assert_eq!(result.get(&(0, 1)).unwrap(), &vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(result.get(&(0, 2)).unwrap(), &vec![2, 3, 4, 5, 6, 7]);
+        assert_eq!(result.get(&(0, 3)).unwrap(), &vec![3, 4, 5, 6, 7, 8]);
+        assert_eq!(result.get(&(0, 4)).unwrap(), &vec![4, 5, 6, 7, 8, 9]);
+    }
+
+    #[test]
+    fn test_impossible_to_fill() {
         let mut grid = SudokuGrid::empty();
         let thermometer = create_thermometer();
-        grid.set_cell(1, 1, 1);
-        let result = thermometer.get_possibilities(&grid, 1, 1);
-        assert!(result.is_empty());
+        grid.set_cell(0, 1, 7);
+        let result = thermometer.get_possibilities(&grid);
+        assert!(result.is_err());
     }
 
     fn create_thermometer() -> Thermometer {

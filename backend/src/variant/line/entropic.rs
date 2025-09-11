@@ -2,7 +2,14 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{SudokuVariant, file_parser::parse_positions, variant::Variant};
+use crate::{
+    SudokuGrid, SudokuVariant,
+    file_parser::parse_positions,
+    variant::{
+        Variant,
+        error::{PossibilityResult, VariantContradiction},
+    },
+};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Entropic {
@@ -94,21 +101,7 @@ impl Variant for Entropic {
         self.cells.clone()
     }
 
-    fn get_possibilities(
-        &self,
-        grid: &crate::SudokuGrid,
-        row: usize,
-        col: usize,
-    ) -> HashMap<(usize, usize), Vec<u8>> {
-        // If (row, col) is not on the line, just pass
-        if !self.cells.contains(&(row, col)) {
-            return HashMap::new();
-        }
-
-        if to_entropy(grid.get_cell(row, col)).is_none() {
-            return HashMap::new();
-        }
-
+    fn get_possibilities(&self, grid: &SudokuGrid) -> PossibilityResult {
         // Step 1: For each mod-3 group, determine if any cell is set, and if so, which entropy
         let mut group_entropy: [Option<Entropy>; 3] = [None, None, None];
         for (i, &(r, c)) in self.cells.iter().enumerate() {
@@ -121,9 +114,12 @@ impl Variant for Entropic {
                 if let Some(existing) = group_entropy[group] {
                     if existing != entropy {
                         // Contradiction: two different entropies in the same group
-                        // TODO: Make this an error at some point!
-                        println!("Contradiction in group {group}: {existing:?} vs {entropy:?}");
-                        return HashMap::new();
+                        return Err(VariantContradiction::Inconsistent {
+                            variant: "Entropic",
+                            reason: format!(
+                                "Contradiction in group {group}: {existing:?} vs {entropy:?}"
+                            ),
+                        });
                     }
                 } else {
                     group_entropy[group] = Some(entropy);
@@ -143,7 +139,9 @@ impl Variant for Entropic {
         // or, if not assigned, from all unused entropies
         let mut possibilities = HashMap::new();
         for (i, &(r, c)) in self.cells.iter().enumerate() {
-            if grid.get_cell(r, c) != 0 {
+            let val = grid.get_cell(r, c);
+            if val != 0 {
+                possibilities.insert((r, c), vec![val]);
                 continue;
             }
             let group = i % 3;
@@ -161,7 +159,7 @@ impl Variant for Entropic {
             }
         }
 
-        possibilities
+        Ok(possibilities)
     }
 }
 
@@ -350,9 +348,13 @@ mod tests {
         let mut grid = SudokuGrid::empty();
         grid.set_cell(1, 1, 1); // Low value
         grid.set_cell(1, 3, 6); // Medium value
-        let result = line.get_possibilities(&grid, 1, 3);
-        assert_eq!(result.len(), 2);
+        let result = line.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 4);
         assert_eq!(result.get(&(1, 2)).unwrap(), &vec![7, 8, 9]);
         assert_eq!(result.get(&(1, 4)).unwrap(), &vec![1, 2, 3]);
+        assert_eq!(result.get(&(1, 1)), Some(&vec![1]));
+        assert_eq!(result.get(&(1, 3)), Some(&vec![6]));
     }
 }

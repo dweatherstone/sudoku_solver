@@ -2,7 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{SudokuVariant, variant::Variant};
+use crate::{
+    SudokuGrid, SudokuVariant,
+    variant::{ALL_POSSIBILITIES, Variant, error::PossibilityResult},
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Diagonal {
@@ -62,37 +65,34 @@ impl Variant for Diagonal {
         self.cells.clone()
     }
 
-    fn get_possibilities(
-        &self,
-        grid: &crate::SudokuGrid,
-        row: usize,
-        col: usize,
-    ) -> HashMap<(usize, usize), Vec<u8>> {
-        // If (row, col) is not on the line, just pass
-        if !self.cells.contains(&(row, col)) {
-            return HashMap::new();
-        }
-
-        let known_cells: HashSet<u8> = self
+    fn get_possibilities(&self, grid: &SudokuGrid) -> PossibilityResult {
+        let known_cells: HashMap<(usize, usize), u8> = self
             .cells
             .iter()
-            .map(|&(r, c)| grid.get_cell(r, c))
-            .filter(|&v| v != 0)
+            .filter_map(|&(row, col)| {
+                let val = grid.get_cell(row, col);
+                (val != 0).then_some(((row, col), val))
+            })
             .collect();
-        let possible_cells: Vec<u8> = (1..=9).filter(|v| !known_cells.contains(v)).collect();
-        let mut possibilities = HashMap::new();
-        for &(r, c) in self.cells.iter() {
-            if r == row && c == col {
-                continue;
-            }
-            let val = grid.get_cell(r, c);
-            if val == 0 {
-                possibilities.insert((r, c), possible_cells.clone());
-            } else {
-                possibilities.insert((r, c), vec![val]);
-            }
-        }
-        possibilities
+        let used: HashSet<u8> = known_cells.values().copied().collect();
+
+        let poss: Vec<u8> = ALL_POSSIBILITIES
+            .iter()
+            .copied()
+            .filter(|v| !used.contains(v))
+            .collect();
+
+        Ok(self
+            .cells
+            .iter()
+            .map(|&cell| {
+                if let Some(&v) = known_cells.get(&cell) {
+                    (cell, vec![v])
+                } else {
+                    (cell, poss.clone())
+                }
+            })
+            .collect())
     }
 }
 

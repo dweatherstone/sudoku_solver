@@ -2,7 +2,14 @@ use std::{collections::HashMap, fmt};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{SudokuVariant, file_parser::parse_positions, variant::Variant};
+use crate::{
+    SudokuGrid, SudokuVariant,
+    file_parser::parse_positions,
+    variant::{
+        ALL_POSSIBILITIES, Variant,
+        error::{PossibilityResult, VariantContradiction},
+    },
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct XVDot {
@@ -83,39 +90,64 @@ impl Variant for XVDot {
         vec![self.cells[0], self.cells[1]]
     }
 
-    fn get_possibilities(
-        &self,
-        grid: &crate::SudokuGrid,
-        row: usize,
-        col: usize,
-    ) -> std::collections::HashMap<(usize, usize), Vec<u8>> {
-        // If (row, col) is not on the dot, just pass
-        if !self.cells.contains(&(row, col)) {
-            return HashMap::new();
-        }
-        let value = grid.get_cell(row, col);
-        if value == 0 {
-            return HashMap::new();
-        }
-
+    fn get_possibilities(&self, grid: &SudokuGrid) -> PossibilityResult {
         let [(r1, c1), (r2, c2)] = self.cells;
-        let (other_row, other_col) = if (row, col) == (r1, c1) {
-            (r2, c2)
-        } else {
-            (r1, c1)
-        };
-
-        if grid.get_cell(other_row, other_col) != 0 {
-            return HashMap::new();
+        let val1 = grid.get_cell(r1, c1);
+        let val2 = grid.get_cell(r2, c2);
+        let mut possibilities = HashMap::new();
+        // Neither value is known, so just return all possibilities for both
+        if val1 == 0 && val2 == 0 {
+            match self.flavour {
+                XVFlavour::X => {
+                    possibilities.insert(self.cells[0], ALL_POSSIBILITIES.to_vec());
+                    possibilities.insert(self.cells[1], ALL_POSSIBILITIES.to_vec());
+                }
+                XVFlavour::V => {
+                    possibilities.insert(self.cells[0], vec![1, 2, 3, 4]);
+                    possibilities.insert(self.cells[1], vec![1, 2, 3, 4]);
+                }
+            }
+        }
+        // If both are already known, then just return the known value vector
+        else if val1 != 0 && val2 != 0 {
+            possibilities.insert(self.cells[0], vec![val1]);
+            possibilities.insert(self.cells[1], vec![val2]);
+        }
+        // One value is known, the other is not
+        else {
+            let known_value = if val1 == 0 { val2 } else { val1 };
+            let known_index: usize = if val1 == 0 { 1 } else { 0 };
+            possibilities.insert(self.cells[known_index], vec![known_value]);
+            match self.flavour {
+                XVFlavour::V => {
+                    if 5 - (known_value as i8) < 1 {
+                        let reason = format!(
+                            "No possible values for V dot based on other cell value of {known_value}"
+                        );
+                        return Err(VariantContradiction::NoPossibilities {
+                            cell: self.cells[(known_index + 1) % 2],
+                            variant: "XVDot:V",
+                            reason,
+                        });
+                    }
+                    possibilities.insert(self.cells[(known_index + 1) % 2], vec![5 - known_value]);
+                }
+                XVFlavour::X => {
+                    if known_value == 5 {
+                        return Err(VariantContradiction::NoPossibilities {
+                            cell: self.cells[(known_index + 1) % 2],
+                            variant: "XVDot:X",
+                            reason: String::from(
+                                "No possible values for X dot based on other cell value of 5",
+                            ),
+                        });
+                    }
+                    possibilities.insert(self.cells[(known_index + 1) % 2], vec![10 - known_value]);
+                }
+            }
         }
 
-        let other_value = match self.flavour {
-            XVFlavour::V => 5 - value,
-            XVFlavour::X => 10 - value,
-        };
-        let mut result = HashMap::new();
-        result.insert((other_row, other_col), vec![other_value]);
-        result
+        Ok(possibilities)
     }
 }
 

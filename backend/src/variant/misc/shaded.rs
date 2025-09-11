@@ -2,7 +2,11 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{SudokuVariant, file_parser::parse_positions, variant::Variant};
+use crate::{
+    SudokuGrid, SudokuVariant,
+    file_parser::parse_positions,
+    variant::{Variant, VariantContradiction, error::PossibilityResult},
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Shaded {
@@ -47,18 +51,21 @@ impl Variant for Shaded {
         vec![self.cell]
     }
 
-    fn get_possibilities(
-        &self,
-        _grid: &crate::SudokuGrid,
-        row: usize,
-        col: usize,
-    ) -> HashMap<(usize, usize), Vec<u8>> {
-        if self.cell != (row, col) {
-            return HashMap::new();
-        }
+    fn get_possibilities(&self, grid: &SudokuGrid) -> PossibilityResult {
         let mut possibilities = HashMap::new();
-        possibilities.insert(self.cell, self.shape.digit_range());
-        possibilities
+        let value = grid.get_cell(self.cell.0, self.cell.1);
+        if value == 0 {
+            possibilities.insert(self.cell, self.shape.digit_range());
+        } else if self.shape.digit_range().contains(&value) {
+            possibilities.insert(self.cell, vec![value]);
+        } else {
+            return Err(VariantContradiction::NoPossibilities {
+                cell: self.cell,
+                variant: "ShadedCell",
+                reason: format!("Cell must contain one of: {:?}", self.shape.digit_range()),
+            });
+        }
+        Ok(possibilities)
     }
 }
 
@@ -180,7 +187,7 @@ mod tests {
     mod get_possibilities {
         use crate::{
             Shaded, SudokuGrid,
-            variant::{Variant, misc::shaded::Shape},
+            variant::{Variant, VariantContradiction, misc::shaded::Shape},
         };
 
         #[test]
@@ -188,9 +195,11 @@ mod tests {
             let mut grid = SudokuGrid::empty();
             let square = Shaded::new((0, 0), Shape::Square);
             grid.set_cell(0, 0, 6);
-            let result = square.get_possibilities(&grid, 0, 0);
+            let result = square.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
             assert_eq!(result.len(), 1);
-            assert_eq!(result.get(&(0, 0)), Some(&vec![2, 4, 6, 8]));
+            assert_eq!(result.get(&(0, 0)), Some(&vec![6]));
         }
 
         #[test]
@@ -198,9 +207,11 @@ mod tests {
             let mut grid = SudokuGrid::empty();
             let circle = Shaded::new((0, 0), Shape::Circle);
             grid.set_cell(0, 0, 5);
-            let result = circle.get_possibilities(&grid, 0, 0);
+            let result = circle.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
             assert_eq!(result.len(), 1);
-            assert_eq!(result.get(&(0, 0)), Some(&vec![1, 3, 5, 7, 9]));
+            assert_eq!(result.get(&(0, 0)), Some(&vec![5]));
         }
 
         #[test]
@@ -208,8 +219,35 @@ mod tests {
             let mut grid = SudokuGrid::empty();
             let shaded = Shaded::new((0, 0), Shape::Circle);
             grid.set_cell(1, 1, 5);
-            let result = shaded.get_possibilities(&grid, 1, 1);
-            assert!(result.is_empty());
+            let result = shaded.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.len(), 1);
+            assert_eq!(result.get(&(0, 0)), Some(&vec![1, 3, 5, 7, 9]));
+        }
+
+        #[test]
+        fn test_cell_set_success() {
+            let mut grid = SudokuGrid::empty();
+            let shaded = Shaded::new((0, 0), Shape::Circle);
+            grid.set_cell(0, 0, 3);
+            let result = shaded.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.len(), 1);
+            assert_eq!(result.get(&(0, 0)).unwrap(), &vec![3]);
+        }
+
+        #[test]
+        fn test_cell_set_fail() {
+            let mut grid = SudokuGrid::empty();
+            let shaded = Shaded::new((0, 0), Shape::Circle);
+            grid.set_cell(0, 0, 2);
+            let result = shaded.get_possibilities(&grid);
+            assert!(matches!(
+                result,
+                Err(VariantContradiction::NoPossibilities { cell: (0, 0), .. })
+            ));
         }
     }
 }

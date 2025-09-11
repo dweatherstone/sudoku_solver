@@ -1,8 +1,15 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{SudokuGrid, SudokuVariant, file_parser::parse_positions, variant::Variant};
+use crate::{
+    SudokuGrid, SudokuVariant,
+    file_parser::parse_positions,
+    variant::{
+        ALL_POSSIBILITIES, Variant,
+        error::{PossibilityResult, VariantContradiction},
+    },
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct KropkiDot {
@@ -83,56 +90,57 @@ impl Variant for KropkiDot {
         vec![self.cells[0], self.cells[1]]
     }
 
-    fn get_possibilities(
-        &self,
-        grid: &SudokuGrid,
-        row: usize,
-        col: usize,
-    ) -> HashMap<(usize, usize), Vec<u8>> {
-        // If (row, col) is not on the dot, just pass
-        if !self.cells.contains(&(row, col)) {
-            return HashMap::new();
-        }
-
-        let value = grid.get_cell(row, col);
-        if value == 0 {
-            return HashMap::new();
-        }
-
+    fn get_possibilities(&self, grid: &SudokuGrid) -> PossibilityResult {
         let [(r1, c1), (r2, c2)] = self.cells;
-
-        let (other_row, other_col) = if (row, col) == (r1, c1) {
-            (r2, c2)
-        } else {
-            (r1, c1)
-        };
-
-        if grid.get_cell(other_row, other_col) != 0 {
-            return HashMap::new();
+        let val1 = grid.get_cell(r1, c1);
+        let val2 = grid.get_cell(r2, c2);
+        let mut possibilities = HashMap::new();
+        // Neither value is known, so just return all possibilities for both
+        if val1 == 0 && val2 == 0 {
+            possibilities.insert(self.cells[0], ALL_POSSIBILITIES.to_vec());
+            possibilities.insert(self.cells[1], ALL_POSSIBILITIES.to_vec());
         }
-
-        let mut values = HashSet::new();
-        match self.colour {
-            KropkiColour::Black => {
-                if value * 2 <= 9 {
-                    values.insert(value * 2);
+        // If both are already known, then just return the known value vector
+        else if val1 != 0 && val2 != 0 {
+            possibilities.insert(self.cells[0], vec![val1]);
+            possibilities.insert(self.cells[1], vec![val2]);
+        }
+        // One value is known, the other is not
+        else {
+            let known_value = if val1 == 0 { val2 } else { val1 };
+            let known_index: usize = if val1 == 0 { 1 } else { 0 };
+            possibilities.insert(self.cells[known_index], vec![known_value]);
+            let mut poss = vec![];
+            match self.colour {
+                KropkiColour::White => {
+                    if known_value > 1 {
+                        poss.push(known_value - 1);
+                    }
+                    if known_value < 9 {
+                        poss.push(known_value + 1);
+                    }
                 }
-                if value % 2 == 0 {
-                    values.insert(value / 2);
+                KropkiColour::Black => {
+                    if known_value % 2 == 0 {
+                        poss.push(known_value / 2);
+                    }
+                    if known_value * 2 < 9 {
+                        poss.push(known_value * 2);
+                    }
                 }
             }
-            KropkiColour::White => {
-                if value <= 8 {
-                    values.insert(value + 1);
-                }
-                if value >= 2 {
-                    values.insert(value - 1);
-                }
+            if poss.is_empty() {
+                let reason =
+                    format!("No possible values based on other cell value of {known_value}");
+                return Err(VariantContradiction::NoPossibilities {
+                    cell: self.cells[(known_index + 1) % 2],
+                    variant: "KropkiDot",
+                    reason,
+                });
             }
+            possibilities.insert(self.cells[(known_index + 1) % 2], poss);
         }
-        let mut result = HashMap::new();
-        result.insert((other_row, other_col), values.into_iter().collect());
-        result
+        Ok(possibilities)
     }
 }
 

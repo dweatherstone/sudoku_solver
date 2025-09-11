@@ -2,7 +2,14 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{SudokuVariant, file_parser::parse_positions, variant::Variant};
+use crate::{
+    SudokuGrid, SudokuVariant,
+    file_parser::parse_positions,
+    variant::{
+        Variant,
+        error::{PossibilityResult, VariantContradiction},
+    },
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Nabner {
@@ -86,22 +93,13 @@ impl Variant for Nabner {
         self.cells.clone()
     }
 
-    fn get_possibilities(
-        &self,
-        grid: &crate::SudokuGrid,
-        row: usize,
-        col: usize,
-    ) -> HashMap<(usize, usize), Vec<u8>> {
-        if !self.cells.contains(&(row, col)) {
-            return HashMap::new();
-        }
-
+    fn get_possibilities(&self, grid: &SudokuGrid) -> PossibilityResult {
         let known_values: HashSet<u8> = self
             .cells
             .iter()
             .filter_map(|&(r, c)| {
                 let val = grid.get_cell(r, c);
-                if val == 0 { None } else { Some(val) }
+                (val != 0).then_some(val)
             })
             .collect();
         let line_len = self.cells.len();
@@ -165,15 +163,24 @@ impl Variant for Nabner {
         // Assign allowed values to unfilled cells
         let mut possibilities = HashMap::new();
         for &(r, c) in &self.cells {
-            if grid.get_cell(r, c) != 0 {
-                continue;
+            let val = grid.get_cell(r, c);
+            if val != 0 {
+                possibilities.insert((r, c), vec![val]);
+            } else {
+                if allowed_values.is_empty() {
+                    return Err(VariantContradiction::NoPossibilities {
+                        cell: (r, c),
+                        variant: "Nabner",
+                        reason: String::from("No allowed values for this variant"),
+                    });
+                }
+                let mut values: Vec<u8> = allowed_values.iter().copied().collect();
+                values.sort_unstable();
+                possibilities.insert((r, c), values);
             }
-            let mut values: Vec<u8> = allowed_values.iter().copied().collect();
-            values.sort_unstable();
-            possibilities.insert((r, c), values);
         }
 
-        possibilities
+        Ok(possibilities)
     }
 }
 
@@ -343,9 +350,14 @@ mod tests {
             grid.set_cell(0, 0, 4);
             grid.set_cell(0, 1, 2);
             grid.set_cell(0, 2, 7);
-            let result = nabner.get_possibilities(&grid, 0, 2);
-            assert_eq!(result.len(), 1);
+            let result = nabner.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.len(), 4);
             assert_eq!(result.get(&(0, 3)), Some(&vec![9]));
+            assert_eq!(result.get(&(0, 0)), Some(&vec![4]));
+            assert_eq!(result.get(&(0, 1)), Some(&vec![2]));
+            assert_eq!(result.get(&(0, 2)), Some(&vec![7]));
         }
 
         #[test]
@@ -354,8 +366,11 @@ mod tests {
             let mut grid = SudokuGrid::empty();
             grid.set_cell(0, 0, 4);
             let expected = vec![1, 2, 6, 7, 8, 9];
-            let result = nabner.get_possibilities(&grid, 0, 0);
-            assert_eq!(result.len(), 3);
+            let result = nabner.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.len(), 4);
+            assert_eq!(result.get(&(0, 0)), Some(&vec![4]));
             for cell in [(0, 1), (0, 2), (0, 3)] {
                 assert_eq!(result.get(&cell).unwrap(), &expected);
             }

@@ -10,6 +10,8 @@ pub use variant::Arrow;
 pub use variant::Diagonal;
 pub use variant::Entropic;
 pub use variant::KillerCage;
+pub use variant::King;
+pub use variant::Knight;
 pub use variant::KropkiDot;
 pub use variant::Nabner;
 pub use variant::QuadrupleCircle;

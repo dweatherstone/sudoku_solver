@@ -2,7 +2,14 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{SudokuVariant, file_parser::parse_positions, variant::Variant};
+use crate::{
+    SudokuGrid, SudokuVariant,
+    file_parser::parse_positions,
+    variant::{
+        ALL_POSSIBILITIES, Variant,
+        error::{PossibilityResult, VariantContradiction},
+    },
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct QuadrupleCircle {
@@ -112,28 +119,19 @@ impl Variant for QuadrupleCircle {
         self.cells.clone()
     }
 
-    fn get_possibilities(
-        &self,
-        grid: &crate::SudokuGrid,
-        row: usize,
-        col: usize,
-    ) -> HashMap<(usize, usize), Vec<u8>> {
-        if !self.cells.contains(&(row, col)) {
-            return HashMap::new();
-        }
-
-        let cell_values: Vec<u8> = self
+    fn get_possibilities(&self, grid: &SudokuGrid) -> PossibilityResult {
+        // Map of all existing cell values surrounding the quadratic circle
+        let cell_values: HashMap<(usize, usize), u8> = self
             .cells
             .iter()
-            .map(|&(r, c)| grid.get_cell(r, c))
+            .map(|&(row, col)| ((row, col), grid.get_cell(row, col)))
             .collect();
 
         let known_digits_in_circle = cell_values
             .iter()
-            .filter_map(|v| if v == &0 { None } else { Some(*v) })
+            .filter_map(|(_, v)| if v == &0 { None } else { Some(*v) })
             .collect::<Vec<_>>();
-
-        let empty_cell_count = cell_values.iter().filter(|&&v| v == 0).count();
+        let empty_cell_count = cell_values.iter().filter(|&(_, &v)| v == 0).count();
 
         let missing_required_digits = self
             .required
@@ -144,18 +142,26 @@ impl Variant for QuadrupleCircle {
 
         // Helper closure for creating the return possibilities
         let insert_possibilities = |values: Vec<u8>| {
-            self.cells
+            Ok(cell_values
                 .iter()
-                .filter(|&&(r, c)| grid.get_cell(r, c) == 0)
-                .map(|&(r, c)| ((r, c), values.clone()))
-                .collect::<HashMap<_, _>>()
+                .map(|(&(r, c), &v)| {
+                    if v != 0 {
+                        ((r, c), vec![v])
+                    } else {
+                        ((r, c), values.clone())
+                    }
+                })
+                .collect::<HashMap<_, _>>())
         };
 
         // Normal Quadruple Circles
         if !self.is_anti {
             // If there is no space to fit the required values, return early
             if empty_cell_count < missing_required_digits.len() {
-                HashMap::new()
+                return Err(VariantContradiction::Inconsistent {
+                    variant: "QuadrupleCircle",
+                    reason: String::from("Not enough empty cells to fill required digits"),
+                });
             }
             // If there is only just space to fit the required values, return these
             else if empty_cell_count == missing_required_digits.len() {
@@ -163,7 +169,7 @@ impl Variant for QuadrupleCircle {
             }
             // If there is more than enough space, then the cells can be any value
             else {
-                insert_possibilities((1..=9).collect())
+                insert_possibilities(ALL_POSSIBILITIES.to_vec())
             }
         } else {
             // Anti-Quadruple
@@ -172,10 +178,21 @@ impl Variant for QuadrupleCircle {
                 .iter()
                 .any(|v| self.required.contains(v))
             {
-                return HashMap::new();
+                return Err(VariantContradiction::Inconsistent {
+                    variant: "Anti-QuadrupleCircle",
+                    reason: String::from(
+                        "Circle contains value that anti-quadruple does not allow",
+                    ),
+                });
             }
             // Return a set of all values not including the required values
-            insert_possibilities((1..=9).filter(|v| !self.required.contains(v)).collect())
+            insert_possibilities(
+                ALL_POSSIBILITIES
+                    .iter()
+                    .filter(|&v| !self.required.contains(v))
+                    .copied()
+                    .collect::<Vec<_>>(),
+            )
         }
     }
 }
@@ -210,18 +227,20 @@ impl std::fmt::Display for QuadrupleCircle {
 
 #[cfg(test)]
 mod get_possibilities {
-    use std::collections::HashMap;
 
     use super::QuadrupleCircle;
-    use crate::{SudokuGrid, variant::Variant};
+    use crate::{
+        SudokuGrid,
+        variant::{Variant, error::PossibilityResult},
+    };
 
     #[test]
     fn test_one_required_digit_one_cell_filled_valid() {
         let mut grid = SudokuGrid::empty();
         let circle = get_test_circle(vec![5], false);
         grid.set_cell(1, 1, 5);
-        let result = circle.get_possibilities(&grid, 1, 1);
-        test_all_possibilities_other_than_first_cell(&result);
+        let result = circle.get_possibilities(&grid);
+        test_all_possibilities_other_than_first_cell(&result, 5);
     }
 
     #[test]
@@ -229,8 +248,8 @@ mod get_possibilities {
         let mut grid = SudokuGrid::empty();
         let circle = get_test_circle(vec![5], false);
         grid.set_cell(1, 1, 3);
-        let result = circle.get_possibilities(&grid, 1, 1);
-        test_all_possibilities_other_than_first_cell(&result);
+        let result = circle.get_possibilities(&grid);
+        test_all_possibilities_other_than_first_cell(&result, 3);
     }
 
     #[test]
@@ -238,8 +257,8 @@ mod get_possibilities {
         let mut grid = SudokuGrid::empty();
         let circle = get_test_circle(vec![4, 7], false);
         grid.set_cell(1, 1, 4);
-        let result = circle.get_possibilities(&grid, 1, 1);
-        test_all_possibilities_other_than_first_cell(&result);
+        let result = circle.get_possibilities(&grid);
+        test_all_possibilities_other_than_first_cell(&result, 4);
     }
 
     #[test]
@@ -249,8 +268,8 @@ mod get_possibilities {
         grid.set_cell(1, 1, 1);
         grid.set_cell(1, 2, 2);
         grid.set_cell(2, 1, 3);
-        let result = circle.get_possibilities(&grid, 1, 1);
-        assert!(result.is_empty());
+        let result = circle.get_possibilities(&grid);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -258,8 +277,11 @@ mod get_possibilities {
         let mut grid = SudokuGrid::empty();
         grid.set_cell(1, 1, 1);
         let circle = get_test_circle(vec![4, 5, 6, 7], true);
-        let result = circle.get_possibilities(&grid, 1, 1);
-        assert_eq!(result.len(), 3);
+        let result = circle.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 4);
+        assert_eq!(result.get(&(1, 1)).unwrap(), &vec![1]);
         for cell in [(1, 2), (2, 1), (2, 2)] {
             assert_eq!(result.get(&cell).unwrap(), &vec![1, 2, 3, 8, 9]);
         }
@@ -272,9 +294,9 @@ mod get_possibilities {
 
         let circle = get_test_circle(vec![5], true);
 
-        let result = circle.get_possibilities(&grid, 1, 1);
+        let result = circle.get_possibilities(&grid);
         // Already invalid — forbidden value placed
-        assert!(result.is_empty());
+        assert!(result.is_err());
     }
 
     #[test]
@@ -282,8 +304,11 @@ mod get_possibilities {
         let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 2);
         let circle = QuadrupleCircle::new(vec![(0, 0), (0, 1), (1, 0)], vec![7], false);
-        let result = circle.get_possibilities(&grid, 0, 0);
-        assert_eq!(result.len(), 2);
+        let result = circle.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 3);
+        assert_eq!(result.get(&(0, 0)).unwrap(), &vec![2]);
         for cell in [(0, 1), (1, 0)] {
             assert!(result.get(&cell).unwrap().contains(&7));
         }
@@ -293,9 +318,15 @@ mod get_possibilities {
         QuadrupleCircle::new(vec![(1, 1), (1, 2), (2, 1), (2, 2)], required, is_anti)
     }
 
-    fn test_all_possibilities_other_than_first_cell(result: &HashMap<(usize, usize), Vec<u8>>) {
+    fn test_all_possibilities_other_than_first_cell(
+        result: &PossibilityResult,
+        first_cell_value: u8,
+    ) {
+        assert!(result.is_ok());
+        let result = result.clone().unwrap();
         let expected: Vec<u8> = (1..=9).collect();
-        assert_eq!(result.len(), 3);
+        assert_eq!(result.len(), 4);
+        assert_eq!(result.get(&(1, 1)).unwrap(), &vec![first_cell_value]);
         assert_eq!(result.get(&(1, 2)).unwrap(), &expected);
         assert_eq!(result.get(&(2, 1)).unwrap(), &expected);
         assert_eq!(result.get(&(2, 2)).unwrap(), &expected);

@@ -1,11 +1,14 @@
+mod chess;
 mod dot;
+mod error;
 mod line;
 mod misc;
 
-use std::collections::HashMap;
-
+pub use chess::King;
+pub use chess::Knight;
 pub use dot::KropkiDot;
 pub use dot::XVDot;
+pub use error::{PossibilityResult, VariantContradiction};
 pub use line::Arrow;
 pub use line::Diagonal;
 pub use line::Entropic;
@@ -27,11 +30,8 @@ pub trait Variant {
     fn constrained_cells(&self) -> Vec<(usize, usize)>;
     /// Determines if the variant is valid for the proposed final grid.
     fn validate_solution(&self, grid: &SudokuGrid) -> bool;
-    /// Once a proposed move is palced in (`row`, `col`), this will return the possible values remaining for any other cells affected by this variant.
-    fn get_possibilities(
-        &self,
-        grid: &SudokuGrid,
-        row: usize,
-        col: usize,
-    ) -> HashMap<(usize, usize), Vec<u8>>;
+    /// Return all possible values (according to the variant's constraint rules) for all cells affected by the variant.
+    fn get_possibilities(&self, grid: &SudokuGrid) -> PossibilityResult;
 }
+
+pub const ALL_POSSIBILITIES: [u8; 9] = [1, 2, 3, 4, 5, 6, 7, 8, 9];

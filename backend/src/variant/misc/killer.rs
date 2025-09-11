@@ -3,7 +3,11 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::{SudokuVariant, file_parser::parse_positions, variant::Variant};
+use crate::{
+    SudokuGrid, SudokuVariant,
+    file_parser::parse_positions,
+    variant::{Variant, error::PossibilityResult},
+};
 
 /// A Killer cage where a number of cells must sum to a given number, and there must be no repeated values in the cage.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -98,6 +102,21 @@ impl KillerCage {
         );
         self.possible_values = result;
     }
+
+    fn convert_hashmaps(
+        &self,
+        possibilities: HashMap<(usize, usize), HashSet<u8>>,
+    ) -> HashMap<(usize, usize), Vec<u8>> {
+        // 6. Convert HashSet<u8> to Vec<u8> for output
+        possibilities
+            .into_iter()
+            .map(|(k, v)| {
+                let mut vec: Vec<u8> = v.into_iter().collect();
+                vec.sort_unstable();
+                (k, vec)
+            })
+            .collect()
+    }
 }
 
 impl Variant for KillerCage {
@@ -157,17 +176,9 @@ impl Variant for KillerCage {
         self.cells.clone()
     }
 
-    fn get_possibilities(
-        &self,
-        grid: &crate::SudokuGrid,
-        row: usize,
-        col: usize,
-    ) -> HashMap<(usize, usize), Vec<u8>> {
-        if !self.cells.contains(&(row, col)) {
-            return HashMap::new();
-        }
-
+    fn get_possibilities(&self, grid: &SudokuGrid) -> PossibilityResult {
         // 1. Gather curent values in the cage
+        let mut possibilities: HashMap<(usize, usize), HashSet<u8>> = HashMap::new();
         let mut used = HashSet::new();
         let mut empty_cells = vec![];
         let mut current_sum = 0;
@@ -178,16 +189,16 @@ impl Variant for KillerCage {
             } else {
                 used.insert(v);
                 current_sum += v;
+                possibilities.insert((r, c), std::iter::once(v).collect());
             }
         }
 
-        // 2. If no empty cells, return empty
+        // 2. If no empty cells, return
         if empty_cells.is_empty() {
-            return HashMap::new();
+            return Ok(self.convert_hashmaps(possibilities));
         }
 
         // 3. For each empty cell, collect possible values from all valid combinations
-        let mut possibilities = HashMap::new();
         for &(r, c) in &empty_cells {
             possibilities.insert((r, c), HashSet::new());
         }
@@ -237,14 +248,7 @@ impl Variant for KillerCage {
         }
 
         // 6. Convert HashSet<u8> to Vec<u8> for output
-        possibilities
-            .into_iter()
-            .map(|(k, v)| {
-                let mut vec: Vec<u8> = v.into_iter().collect();
-                vec.sort_unstable();
-                (k, vec)
-            })
-            .collect()
+        Ok(self.convert_hashmaps(possibilities))
     }
 }
 
@@ -431,8 +435,13 @@ mod tests {
             let cage = KillerCage::new(vec![(0, 0), (0, 1)], 10);
             let mut grid = SudokuGrid::empty();
             grid.set_cell(2, 2, 5); // Not in cage
-            let result = cage.get_possibilities(&grid, 2, 2);
-            assert!(result.is_empty());
+            let result = cage.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.len(), 2);
+            let expected = vec![1, 2, 3, 4, 6, 7, 8, 9];
+            assert_eq!(result.get(&(0, 0)), Some(&expected));
+            assert_eq!(result.get(&(0, 1)), Some(&expected));
         }
 
         #[test]
@@ -441,10 +450,13 @@ mod tests {
             grid.set_cell(0, 0, 1);
             let cage = KillerCage::new(vec![(0, 0), (0, 1)], 4);
 
-            let result = cage.get_possibilities(&grid, 0, 0);
+            let result = cage.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
             let expected: Vec<u8> = vec![3];
 
-            assert_eq!(result.len(), 1);
+            assert_eq!(result.len(), 2);
+            assert_eq!(result.get(&(0, 0)), Some(&vec![1]));
             assert_eq!(result.get(&(0, 1)), Some(&expected));
         }
 
@@ -454,8 +466,11 @@ mod tests {
             grid.set_cell(0, 0, 5); // Too big for sum of 4
             let cage = KillerCage::new(vec![(0, 0), (0, 1)], 4);
 
-            let result = cage.get_possibilities(&grid, 0, 0);
-            assert_eq!(result.len(), 1);
+            let result = cage.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.len(), 2);
+            assert_eq!(result.get(&(0, 0)), Some(&vec![5]));
             assert!(result.get(&(0, 1)).unwrap().is_empty());
         }
 
@@ -465,11 +480,14 @@ mod tests {
             grid.set_cell(0, 0, 3);
             let cage = KillerCage::new(vec![(0, 0), (0, 1), (0, 2)], 10);
 
-            let result = cage.get_possibilities(&grid, 0, 0);
+            let result = cage.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
             // Valid remaining pairs that sum to 7 and don’t contain 3: (1,6), (2,5), (4,3), (5,2), etc.
             // But 3 already used, so (4,3) and (3,4) are invalid
             let expected = vec![1, 2, 5, 6];
-            assert_eq!(result.len(), 2);
+            assert_eq!(result.len(), 3);
+            assert_eq!(result.get(&(0, 0)), Some(&vec![3]));
             assert_eq!(result.get(&(0, 1)), Some(&expected));
             assert_eq!(result.get(&(0, 2)), Some(&expected));
         }
@@ -480,8 +498,12 @@ mod tests {
             grid.set_cell(0, 0, 3);
             grid.set_cell(0, 1, 7);
             let cage = KillerCage::new(vec![(0, 0), (0, 1), (0, 2)], 10);
-            let result = cage.get_possibilities(&grid, 0, 1);
-            assert_eq!(result.len(), 1);
+            let result = cage.get_possibilities(&grid);
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.len(), 3);
+            assert_eq!(result.get(&(0, 0)), Some(&vec![3]));
+            assert_eq!(result.get(&(0, 1)), Some(&vec![7]));
             assert!(result.get(&(0, 2)).unwrap().is_empty());
         }
     }

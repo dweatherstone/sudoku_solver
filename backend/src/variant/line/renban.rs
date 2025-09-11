@@ -5,7 +5,14 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::{SudokuVariant, file_parser::parse_positions, variant::Variant};
+use crate::{
+    SudokuGrid, SudokuVariant,
+    file_parser::parse_positions,
+    variant::{
+        Variant,
+        error::{PossibilityResult, VariantContradiction},
+    },
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Renban {
@@ -99,37 +106,26 @@ impl Variant for Renban {
         HashSet::from_iter(min_val..=max_val) == values
     }
 
-    fn get_possibilities(
-        &self,
-        grid: &crate::SudokuGrid,
-        row: usize,
-        col: usize,
-    ) -> HashMap<(usize, usize), Vec<u8>> {
-        if !self.cells.contains(&(row, col)) {
-            return HashMap::new();
-        }
-
-        let mut known: HashMap<(usize, usize), u8> = HashMap::new();
-        for &(r, c) in &self.cells {
-            let val = grid.get_cell(r, c);
-            if val != 0 {
-                // Duplicate check
-                if known.values().any(|&v| v == val) {
-                    return HashMap::new();
-                }
-                known.insert((r, c), val);
-            }
-        }
-
-        let known_values: HashSet<u8> = known.values().copied().collect();
+    fn get_possibilities(&self, grid: &SudokuGrid) -> PossibilityResult {
+        let used: HashSet<u8> = self
+            .cells
+            .iter()
+            .filter_map(|&(r, c)| {
+                let val = grid.get_cell(r, c);
+                (val != 0).then_some(val)
+            })
+            .collect();
         let line_len = self.cells.len() as u8;
 
         // Check for invalid spread
-        if known_values.len() > 1 {
-            let min = *known_values.iter().min().unwrap();
-            let max = *known_values.iter().max().unwrap();
+        if used.len() > 1 {
+            let min = *used.iter().min().unwrap();
+            let max = *used.iter().max().unwrap();
             if max - min + 1 > line_len {
-                return HashMap::new();
+                return Err(VariantContradiction::Inconsistent {
+                    variant: "Renban",
+                    reason: String::from("Invalid spread on Renban line"),
+                });
             }
         }
 
@@ -137,7 +133,7 @@ impl Variant for Renban {
         let mut valid_sets: Vec<HashSet<u8>> = Vec::new();
         for start in 1..=(10 - line_len) {
             let candidate: HashSet<u8> = (start..start + line_len).collect();
-            if known_values.is_subset(&candidate) {
+            if used.is_subset(&candidate) {
                 valid_sets.push(candidate);
             }
         }
@@ -146,7 +142,7 @@ impl Variant for Renban {
         let mut allowed_values = HashSet::new();
         for s in &valid_sets {
             for v in s {
-                if !known_values.contains(v) {
+                if !used.contains(v) {
                     allowed_values.insert(*v);
                 }
             }
@@ -154,16 +150,25 @@ impl Variant for Renban {
 
         let mut possibilities = HashMap::new();
         for &(r, c) in &self.cells {
-            if grid.get_cell(r, c) != 0 {
-                continue;
+            let val = grid.get_cell(r, c);
+            if val != 0 {
+                possibilities.insert((r, c), vec![val]);
+            } else {
+                if allowed_values.is_empty() {
+                    return Err(VariantContradiction::NoPossibilities {
+                        cell: (r, c),
+                        variant: "Renban",
+                        reason: String::from("No allowed values possible"),
+                    });
+                }
+                possibilities.insert((r, c), {
+                    let mut v: Vec<u8> = allowed_values.iter().copied().collect();
+                    v.sort_unstable();
+                    v
+                });
             }
-            possibilities.insert((r, c), {
-                let mut v: Vec<u8> = allowed_values.iter().copied().collect();
-                v.sort_unstable();
-                v
-            });
         }
-        possibilities
+        Ok(possibilities)
     }
 }
 
@@ -190,9 +195,12 @@ mod tests {
         let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)]);
         let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 3);
-        let result = renban.get_possibilities(&grid, 0, 0);
+        let result = renban.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
         let expected: Vec<u8> = vec![1, 2, 4, 5, 6, 7];
-        assert_eq!(result.len(), 4);
+        assert_eq!(result.len(), 5);
+        assert_eq!(result.get(&(0, 0)).unwrap(), &vec![3]);
         for c in 1..5 {
             assert_eq!(result.get(&(0, c)).unwrap(), &expected);
         }
@@ -204,10 +212,14 @@ mod tests {
         let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 5);
         grid.set_cell(0, 3, 6);
-        let result = renban.get_possibilities(&grid, 0, 3);
-        assert_eq!(result.len(), 2);
+        let result = renban.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 4);
         assert_eq!(result.get(&(0, 1)).unwrap(), &vec![3, 4, 7, 8]);
         assert_eq!(result.get(&(0, 2)).unwrap(), &vec![3, 4, 7, 8]);
+        assert_eq!(result.get(&(0, 0)).unwrap(), &vec![5]);
+        assert_eq!(result.get(&(0, 3)).unwrap(), &vec![6]);
     }
 
     #[test]
@@ -217,8 +229,13 @@ mod tests {
         grid.set_cell(0, 0, 3);
         grid.set_cell(0, 1, 2);
         grid.set_cell(0, 2, 4);
-        let result = renban.get_possibilities(&grid, 0, 2);
-        assert!(result.is_empty());
+        let result = renban.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 3);
+        assert_eq!(result.get(&(0, 0)).unwrap(), &vec![3]);
+        assert_eq!(result.get(&(0, 1)).unwrap(), &vec![2]);
+        assert_eq!(result.get(&(0, 2)).unwrap(), &vec![4]);
     }
 
     #[test]
@@ -227,8 +244,9 @@ mod tests {
         let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 1);
         grid.set_cell(0, 1, 5);
-        let result = renban.get_possibilities(&grid, 0, 1);
-        assert!(result.is_empty());
+        let result = renban.get_possibilities(&grid);
+
+        assert!(result.is_err());
     }
 
     #[test]
@@ -237,8 +255,13 @@ mod tests {
         let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 5);
         grid.set_cell(0, 1, 5);
-        let result = renban.get_possibilities(&grid, 0, 1);
-        assert!(result.is_empty());
+        let result = renban.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 3);
+        assert_eq!(result.get(&(0, 0)), Some(&vec![5]));
+        assert_eq!(result.get(&(0, 1)), Some(&vec![5]));
+        assert_eq!(result.get(&(0, 2)), Some(&vec![3, 4, 6, 7]));
     }
 
     #[test]
@@ -246,9 +269,13 @@ mod tests {
         let renban = Renban::new(vec![(0, 0), (0, 1), (0, 2)]);
         let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 1, 9);
-        let result = renban.get_possibilities(&grid, 0, 1);
+        let result = renban.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 3);
         assert_eq!(result.get(&(0, 0)).unwrap(), &vec![7, 8]);
         assert_eq!(result.get(&(0, 2)).unwrap(), &vec![7, 8]);
+        assert_eq!(result.get(&(0, 1)).unwrap(), &vec![9]);
     }
 
     #[test]
@@ -257,9 +284,13 @@ mod tests {
         let mut grid = SudokuGrid::empty();
         grid.set_cell(0, 0, 2);
         grid.set_cell(0, 1, 4);
-        let result = renban.get_possibilities(&grid, 0, 1);
-        assert_eq!(result.len(), 1);
+        let result = renban.get_possibilities(&grid);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.len(), 3);
         assert_eq!(result.get(&(0, 2)).unwrap(), &vec![3]);
+        assert_eq!(result.get(&(0, 0)).unwrap(), &vec![2]);
+        assert_eq!(result.get(&(0, 1)).unwrap(), &vec![4]);
     }
 
     #[test]

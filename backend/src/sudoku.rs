@@ -1,16 +1,8 @@
-use std::{
-    collections::{HashMap, HashSet},
-    io::Error,
-    path::Path,
-};
+use std::{collections::HashSet, io::Error, path::Path};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    Arrow, Diagonal, Entropic, KillerCage, KropkiDot, Nabner, QuadrupleCircle, Renban, Shaded,
-    Thermometer, XVDot, file_parser,
-    variant::{GermanWhisper, RegionSum, Variant},
-};
+use crate::{file_parser, variant::*};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub enum SudokuVariant {
@@ -18,6 +10,8 @@ pub enum SudokuVariant {
     Diagonal(Diagonal),
     Entropic(Entropic),
     Killer(KillerCage),
+    King(King),
+    Knight(Knight),
     Kropki(KropkiDot),
     QuadrupleCircles(QuadrupleCircle),
     RegionSum(RegionSum),
@@ -59,6 +53,8 @@ impl SudokuVariant {
             "german whisper" => GermanWhisper::parse(data),
             "shaded" => Shaded::parse(data),
             "nabner" => Nabner::parse(data),
+            "king" => King::parse(data),
+            "knight" => Knight::parse(data),
             _ => None,
         }
     }
@@ -78,6 +74,8 @@ impl SudokuVariant {
             SudokuVariant::GermanWhisper(gw) => gw.is_valid(grid, row, col, value),
             SudokuVariant::Shaded(s) => s.is_valid(grid, row, col, value),
             SudokuVariant::Nabner(n) => n.is_valid(grid, row, col, value),
+            SudokuVariant::King(k) => k.is_valid(grid, row, col, value),
+            SudokuVariant::Knight(n) => n.is_valid(grid, row, col, value),
         }
     }
 
@@ -96,6 +94,8 @@ impl SudokuVariant {
             SudokuVariant::GermanWhisper(gw) => gw.validate_solution(grid),
             SudokuVariant::Shaded(s) => s.validate_solution(grid),
             SudokuVariant::Nabner(n) => n.validate_solution(grid),
+            SudokuVariant::King(k) => k.validate_solution(grid),
+            SudokuVariant::Knight(n) => n.validate_solution(grid),
         }
     }
 
@@ -114,29 +114,28 @@ impl SudokuVariant {
             SudokuVariant::GermanWhisper(gw) => gw.constrained_cells(),
             SudokuVariant::Shaded(s) => s.constrained_cells(),
             SudokuVariant::Nabner(n) => n.constrained_cells(),
+            SudokuVariant::King(k) => k.constrained_cells(),
+            SudokuVariant::Knight(n) => n.constrained_cells(),
         }
     }
 
-    pub fn get_possibilities(
-        &self,
-        grid: &SudokuGrid,
-        row: usize,
-        col: usize,
-    ) -> HashMap<(usize, usize), Vec<u8>> {
+    pub fn get_possibilities(&self, grid: &SudokuGrid) -> PossibilityResult {
         match self {
-            SudokuVariant::Diagonal(diag) => diag.get_possibilities(grid, row, col),
-            SudokuVariant::Killer(cage) => cage.get_possibilities(grid, row, col),
-            SudokuVariant::Kropki(dot) => dot.get_possibilities(grid, row, col),
-            SudokuVariant::QuadrupleCircles(circle) => circle.get_possibilities(grid, row, col),
-            SudokuVariant::Renban(ren) => ren.get_possibilities(grid, row, col),
-            SudokuVariant::Thermometer(therm) => therm.get_possibilities(grid, row, col),
-            SudokuVariant::Entropic(ent) => ent.get_possibilities(grid, row, col),
-            SudokuVariant::Arrow(arrow) => arrow.get_possibilities(grid, row, col),
-            SudokuVariant::RegionSum(rs) => rs.get_possibilities(grid, row, col),
-            SudokuVariant::XVDot(xv) => xv.get_possibilities(grid, row, col),
-            SudokuVariant::GermanWhisper(gw) => gw.get_possibilities(grid, row, col),
-            SudokuVariant::Shaded(s) => s.get_possibilities(grid, row, col),
-            SudokuVariant::Nabner(n) => n.get_possibilities(grid, row, col),
+            SudokuVariant::Diagonal(diag) => diag.get_possibilities(grid),
+            SudokuVariant::Killer(cage) => cage.get_possibilities(grid),
+            SudokuVariant::Kropki(dot) => dot.get_possibilities(grid),
+            SudokuVariant::QuadrupleCircles(circle) => circle.get_possibilities(grid),
+            SudokuVariant::Renban(ren) => ren.get_possibilities(grid),
+            SudokuVariant::Thermometer(therm) => therm.get_possibilities(grid),
+            SudokuVariant::Entropic(ent) => ent.get_possibilities(grid),
+            SudokuVariant::Arrow(arrow) => arrow.get_possibilities(grid),
+            SudokuVariant::RegionSum(rs) => rs.get_possibilities(grid),
+            SudokuVariant::XVDot(xv) => xv.get_possibilities(grid),
+            SudokuVariant::GermanWhisper(gw) => gw.get_possibilities(grid),
+            SudokuVariant::Shaded(s) => s.get_possibilities(grid),
+            SudokuVariant::Nabner(n) => n.get_possibilities(grid),
+            SudokuVariant::King(k) => k.get_possibilities(grid),
+            SudokuVariant::Knight(n) => n.get_possibilities(grid),
         }
     }
 }
@@ -157,6 +156,8 @@ impl std::fmt::Display for SudokuVariant {
             SudokuVariant::GermanWhisper(gw) => write!(f, "{gw}"),
             SudokuVariant::Shaded(s) => write!(f, "{s}"),
             SudokuVariant::Nabner(n) => write!(f, "{n}"),
+            SudokuVariant::King(k) => write!(f, "{k}"),
+            SudokuVariant::Knight(n) => write!(f, "{n}"),
         }
     }
 }
@@ -164,34 +165,19 @@ impl std::fmt::Display for SudokuVariant {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SudokuGrid {
     cells: [[u8; 9]; 9],
-    possibilities: HashMap<(usize, usize), Vec<u8>>,
     variants: Vec<SudokuVariant>,
 }
 
 impl SudokuGrid {
     pub fn empty() -> Self {
-        let mut possibilities = HashMap::new();
-        for r in 0..9 {
-            for c in 0..9 {
-                possibilities.insert((r, c), (1..=9).collect());
-            }
-        }
         SudokuGrid {
             cells: [[0; 9]; 9],
-            possibilities,
             variants: Vec::new(),
         }
     }
 
     pub fn get_cell(&self, row: usize, col: usize) -> u8 {
         self.cells[row][col]
-    }
-
-    pub fn get_possibilities(&self, row: usize, col: usize) -> Vec<u8> {
-        self.possibilities
-            .get(&(row, col))
-            .unwrap_or(&vec![self.get_cell(row, col)])
-            .clone()
     }
 
     pub fn get_cells(&self) -> [[u8; 9]; 9] {
@@ -204,20 +190,32 @@ impl SudokuGrid {
 
     pub fn set_cell(&mut self, row: usize, col: usize, value: u8) {
         self.cells[row][col] = value;
-        if value == 0 {
-            *self
-                .possibilities
-                .entry((row, col))
-                .or_insert(vec![1, 2, 3, 4, 5, 6, 7, 8, 9]) = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
-        } else {
-            *self.possibilities.entry((row, col)).or_insert(vec![value]) = vec![value];
-        }
-        // Update the possibilities to remove value for the row, column and box, and apply variant logic
-        self.update_possibilities(row, col, value);
     }
 
     pub fn add_variant(&mut self, variant: SudokuVariant) {
         self.variants.push(variant);
+    }
+
+    pub fn get_standard_possibilities_for_cell(&self, row: usize, col: usize) -> Vec<u8> {
+        // Already filled
+        if self.get_cell(row, col) != 0 {
+            return vec![];
+        }
+        let mut possible: Vec<u8> = (1..=9).collect();
+        // Remove values from row and column
+        for i in 0..9 {
+            possible.retain(|&v| v != self.get_cell(row, i));
+            possible.retain(|&v| v != self.get_cell(i, col));
+        }
+        // Remove values from box
+        let box_row = row / 3 * 3;
+        let box_col = col / 3 * 3;
+        for r in box_row..box_row + 3 {
+            for c in box_col..box_col + 3 {
+                possible.retain(|&v| v != self.get_cell(r, c));
+            }
+        }
+        possible
     }
 
     pub fn display(&self, show_variants: bool) {
@@ -343,47 +341,6 @@ impl SudokuGrid {
             }
         }
         true
-    }
-
-    fn update_possibilities(&mut self, row: usize, col: usize, value: u8) {
-        // Remove value from possibilities in the same row
-        for c in 0..9 {
-            if c != col {
-                if let Some(poss) = self.possibilities.get_mut(&(row, c)) {
-                    poss.retain(|&p| p != value);
-                }
-            }
-        }
-        // Remove value from possibilities in the same col
-        for r in 0..9 {
-            if r != row {
-                if let Some(poss) = self.possibilities.get_mut(&(r, col)) {
-                    poss.retain(|&p| p != value);
-                }
-            }
-        }
-        // Remove value from possibilities in the same box
-        let box_row = row / 3 * 3;
-        let box_col = col / 3 * 3;
-        for r in box_row..box_row + 3 {
-            for c in box_col..box_col + 3 {
-                if r != row || c != col {
-                    if let Some(poss) = self.possibilities.get_mut(&(r, c)) {
-                        poss.retain(|&p| p != value);
-                    }
-                }
-            }
-        }
-        // Now apply variant constraints to further reduce possibilies
-        for variant in &self.variants {
-            if variant.constrained_cells().contains(&(row, col)) {
-                for (&(r, c), var_poss) in variant.get_possibilities(self, row, col).iter() {
-                    if let Some(poss) = self.possibilities.get_mut(&(r, c)) {
-                        poss.retain(|p| var_poss.contains(p));
-                    }
-                }
-            }
-        }
     }
 }
 
