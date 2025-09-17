@@ -414,7 +414,7 @@ fn ultraviolet(do_solve: bool) {
 }
 
 fn triumvirate(do_solve: bool) {
-    let filename = "peppermint.txt";
+    let filename = "exosphere.txt";
     let mut path = PathBuf::from(get_examples_path());
     path.push(filename);
 
@@ -422,7 +422,7 @@ fn triumvirate(do_solve: bool) {
 
     if do_solve {
         let start = Instant::now();
-        run_solve(&mut grid, true, false);
+        run_solve(&mut grid, true, true);
         let duration = start.elapsed();
         println!("Time elapsed: {:?}", duration);
     } else {

@@ -180,16 +180,16 @@ impl Variant for KillerCage {
         // 1. Gather curent values in the cage
         let mut possibilities: HashMap<(usize, usize), HashSet<u8>> = HashMap::new();
         let mut used = HashSet::new();
-        let mut empty_cells = vec![];
+        let mut empty_cells = Vec::new();
         let mut current_sum = 0;
         for &(r, c) in &self.cells {
-            let v = grid.get_cell(r, c);
-            if v == 0 {
+            let value = grid.get_cell(r, c);
+            if value == 0 {
                 empty_cells.push((r, c));
             } else {
-                used.insert(v);
-                current_sum += v;
-                possibilities.insert((r, c), std::iter::once(v).collect());
+                used.insert(value);
+                current_sum += value;
+                possibilities.insert((r, c), std::iter::once(value).collect());
             }
         }
 
