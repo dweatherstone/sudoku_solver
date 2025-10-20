@@ -99,7 +99,8 @@ fn main() -> Result<(), Error> {
         // kropki_example(true);
         // draft_day(true);
         // ultraviolet(true);
-        triumvirate(true);
+        // triumvirate(true);
+        pointing_pairs(true);
         return Ok(());
     }
     let filename = &args[1];
@@ -426,6 +427,42 @@ fn triumvirate(do_solve: bool) {
         let duration = start.elapsed();
         println!("Time elapsed: {:?}", duration);
     } else {
+        grid.display(true);
+    }
+}
+
+fn pointing_pairs(do_solve: bool) {
+    let mut grid = SudokuGrid::empty();
+    let givens = [
+        (0, 2, 9),
+        (0, 4, 7),
+        (1, 1, 8),
+        (1, 3, 4),
+        (2, 2, 3),
+        (2, 7, 2),
+        (2, 8, 8),
+        (3, 0, 1),
+        (3, 6, 6),
+        (3, 7, 7),
+        (4, 1, 2),
+        (4, 4, 1),
+        (4, 5, 3),
+        (4, 7, 4),
+        (5, 1, 4),
+        (5, 5, 7),
+        (5, 6, 8),
+        (6, 0, 6),
+        (6, 4, 3),
+        (7, 1, 1),
+        (8, 6, 2),
+        (8, 7, 8),
+        (8, 8, 4),
+    ];
+    for &(r, c, v) in &givens {
+        grid.set_cell(r, c, v);
+    }
+
+    if do_solve {
         grid.display(true);
     }
 }

@@ -1,0 +1,148 @@
+body {
+  font-family: sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 2rem;
+}
+
+table {
+  border-collapse: collapse;
+  position: relative;
+}
+
+td {
+  width: 40px;
+  height: 40px;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 20px;
+  border: 1px solid #aaa;
+  background: white;
+  position: relative;
+}
+
+#sudoku-container {
+  position: relative;
+}
+
+.block-right {
+  border-right: 3px solid black;
+}
+
+.block-bottom {
+  border-bottom: 3px solid black;
+}
+
+/* Killer Cage styles */
+.killer-cage {
+  position: absolute;
+  border: 2px dashed #666;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.killer-border-top,
+.killer-border-bottom,
+.killer-border-left,
+.killer-border-right {
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.killer-sum {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 0.7em;
+  color: #555;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 0 2px;
+  border-radius: 2px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Kropki Dot styles */
+.kropki-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  z-index: 1;
+}
+
+.kropki-dot.white {
+  background: white;
+  border: 1px solid #666;
+}
+
+.kropki-dot.black {
+  background: #666;
+}
+
+/* Quadruple Circle styles */
+.quadruple-circle {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #666;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  z-index: 1;
+  transform: translate(-50%, -50%);
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+.quadruple-circle::before {
+  content: attr(data-numbers);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  line-height: 1;
+}
+
+.killer-top {
+  border-top: 2px dashed #666 !important;
+}
+
+.killer-bottom {
+  border-bottom: 2px dashed #666 !important;
+}
+
+.killer-left {
+  border-left: 2px dashed #666 !important;
+}
+
+.killer-right {
+  border-right: 2px dashed #666 !important;
+}
+
+.thermo-svg {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+}
+
+.thermo-bulb {
+  fill: #b3e0ff;
+  stroke: #0077b6;
+  stroke-width: 3;
+}
+
+.thermo-line {
+  stroke: #0077b6;
+  stroke-width: 7;
+  stroke-linecap: round;
+}
